@@ -1,0 +1,39 @@
+schema_version = "1.0.0"
+
+id = "nifblend"
+version = "0.1.0"
+name = "NifBlend"
+tagline = "Fast NIF/KF import/export for Bethesda game modding"
+maintainer = "NifBlend contributors"
+type = "add-on"
+
+# https://docs.blender.org/manual/en/dev/extensions/getting_started.html
+blender_version_min = "5.0.0"
+
+license = [
+    "SPDX:GPL-3.0-or-later",
+]
+
+tags = ["Import-Export"]
+
+# Wheels are populated at build time by `scripts/build_extension.py`.
+# numpy is the only runtime dep (Blender ships its own numpy, but pin via wheel
+# for reproducibility on minimal Python builds).
+wheels = []
+
+[permissions]
+files = "Read/write NIF, KF, and texture files referenced by the user."
+
+[build]
+paths_exclude_pattern = [
+    "__pycache__/",
+    "/.git/",
+    "/.github/",
+    "/tests/",
+    "/scripts/",
+    "/.venv/",
+    "*.pyc",
+    ".mypy_cache/",
+    ".ruff_cache/",
+    ".pytest_cache/",
+]

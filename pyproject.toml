@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nifblend"
+version = "0.1.0"
+description = "Fast NIF/KF import/export for Bethesda game modding (Blender 5.0+ extension)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "NifBlend contributors" }]
+keywords = ["blender", "nif", "kf", "bethesda", "skyrim", "fallout", "modding"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Graphics :: 3D Modeling",
+]
+dependencies = [
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "fake-bpy-module-latest",
+]
+
+[project.urls]
+Repository = "https://github.com/kennpet/NifBlend"
+Changelog = "https://github.com/kennpet/NifBlend/blob/main/CHANGELOG.md"
+Roadmap = "https://github.com/kennpet/NifBlend/blob/main/ROADMAP.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["nifblend"]
