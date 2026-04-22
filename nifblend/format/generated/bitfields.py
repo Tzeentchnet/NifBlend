@@ -10,8 +10,14 @@ from typing import IO
 
 from nifblend.format.base import Compound, ReadContext
 from nifblend.format.primitives import (
-    read_u8, read_u16, read_u32, read_u64,
-    write_u8, write_u16, write_u32, write_u64,
+    read_u8,
+    read_u16,
+    read_u32,
+    read_u64,
+    write_u8,
+    write_u16,
+    write_u32,
+    write_u64,
 )
 
 __all__ = ['AlphaFlags', 'BSGeometryDataFlags', 'BSVertexDesc', 'NiGeometryDataFlags', 'TexturingFlags', 'TexturingMapFlags', 'TimeControllerFlags']
@@ -56,6 +62,36 @@ class AlphaFlags(Compound):
         raw |= (self.editor_alpha_threshold & 0x1) << 15
         write_u16(stream, raw)
 
+    def _packed(self) -> int:
+        raw = 0
+        raw |= (self.alpha_blend & 0x1) << 0
+        raw |= (self.source_blend_mode & 0xF) << 1
+        raw |= (self.destination_blend_mode & 0xF) << 5
+        raw |= (self.alpha_test & 0x1) << 9
+        raw |= (self.test_func & 0x7) << 10
+        raw |= (self.no_sorter & 0x1) << 13
+        raw |= (self.clone_unique & 0x1) << 14
+        raw |= (self.editor_alpha_threshold & 0x1) << 15
+        return raw
+
+    def __int__(self) -> int:
+        return self._packed()
+
+    def __index__(self) -> int:
+        return self._packed()
+
+    def __rshift__(self, n: int) -> int:
+        return self._packed() >> int(n)
+
+    def __lshift__(self, n: int) -> int:
+        return self._packed() << int(n)
+
+    def __and__(self, n: int) -> int:
+        return self._packed() & int(n)
+
+    def __or__(self, n: int) -> int:
+        return self._packed() | int(n)
+
 
 @dataclass(slots=True)
 class BSGeometryDataFlags(Compound):
@@ -78,6 +114,31 @@ class BSGeometryDataFlags(Compound):
         raw |= (self.havok_material & 0x3F) << 6
         raw |= (self.has_tangents & 0x1) << 12
         write_u16(stream, raw)
+
+    def _packed(self) -> int:
+        raw = 0
+        raw |= (self.has_uv & 0x3F) << 0
+        raw |= (self.havok_material & 0x3F) << 6
+        raw |= (self.has_tangents & 0x1) << 12
+        return raw
+
+    def __int__(self) -> int:
+        return self._packed()
+
+    def __index__(self) -> int:
+        return self._packed()
+
+    def __rshift__(self, n: int) -> int:
+        return self._packed() >> int(n)
+
+    def __lshift__(self, n: int) -> int:
+        return self._packed() << int(n)
+
+    def __and__(self, n: int) -> int:
+        return self._packed() & int(n)
+
+    def __or__(self, n: int) -> int:
+        return self._packed() | int(n)
 
 
 @dataclass(slots=True)
@@ -129,6 +190,40 @@ class BSVertexDesc(Compound):
         raw |= (self.vertex_attributes & 0xFFF) << 44
         write_u64(stream, raw)
 
+    def _packed(self) -> int:
+        raw = 0
+        raw |= (self.vertex_data_size & 0xF) << 0
+        raw |= (self.dynamic_vertex_size & 0xF) << 4
+        raw |= (self.uv1_offset & 0xF) << 8
+        raw |= (self.uv2_offset & 0xF) << 12
+        raw |= (self.normal_offset & 0xF) << 16
+        raw |= (self.tangent_offset & 0xF) << 20
+        raw |= (self.color_offset & 0xF) << 24
+        raw |= (self.skinning_data_offset & 0xF) << 28
+        raw |= (self.landscape_data_offset & 0xF) << 32
+        raw |= (self.eye_data_offset & 0xF) << 36
+        raw |= (self.unused_01 & 0xF) << 40
+        raw |= (self.vertex_attributes & 0xFFF) << 44
+        return raw
+
+    def __int__(self) -> int:
+        return self._packed()
+
+    def __index__(self) -> int:
+        return self._packed()
+
+    def __rshift__(self, n: int) -> int:
+        return self._packed() >> int(n)
+
+    def __lshift__(self, n: int) -> int:
+        return self._packed() << int(n)
+
+    def __and__(self, n: int) -> int:
+        return self._packed() & int(n)
+
+    def __or__(self, n: int) -> int:
+        return self._packed() | int(n)
+
 
 @dataclass(slots=True)
 class NiGeometryDataFlags(Compound):
@@ -151,6 +246,31 @@ class NiGeometryDataFlags(Compound):
         raw |= (self.havok_material & 0x3F) << 6
         raw |= (self.nbt_method & 0x3) << 12
         write_u16(stream, raw)
+
+    def _packed(self) -> int:
+        raw = 0
+        raw |= (self.num_uv_sets & 0x3F) << 0
+        raw |= (self.havok_material & 0x3F) << 6
+        raw |= (self.nbt_method & 0x3) << 12
+        return raw
+
+    def __int__(self) -> int:
+        return self._packed()
+
+    def __index__(self) -> int:
+        return self._packed()
+
+    def __rshift__(self, n: int) -> int:
+        return self._packed() >> int(n)
+
+    def __lshift__(self, n: int) -> int:
+        return self._packed() << int(n)
+
+    def __and__(self, n: int) -> int:
+        return self._packed() & int(n)
+
+    def __or__(self, n: int) -> int:
+        return self._packed() | int(n)
 
 
 @dataclass(slots=True)
@@ -177,6 +297,31 @@ class TexturingFlags(Compound):
         raw |= (self.decal_count & 0xFF) << 4
         write_u16(stream, raw)
 
+    def _packed(self) -> int:
+        raw = 0
+        raw |= (self.multitexture & 0x1) << 0
+        raw |= (self.apply_mode & 0x7) << 1
+        raw |= (self.decal_count & 0xFF) << 4
+        return raw
+
+    def __int__(self) -> int:
+        return self._packed()
+
+    def __index__(self) -> int:
+        return self._packed()
+
+    def __rshift__(self, n: int) -> int:
+        return self._packed() >> int(n)
+
+    def __lshift__(self, n: int) -> int:
+        return self._packed() << int(n)
+
+    def __and__(self, n: int) -> int:
+        return self._packed() & int(n)
+
+    def __or__(self, n: int) -> int:
+        return self._packed() | int(n)
+
 
 @dataclass(slots=True)
 class TexturingMapFlags(Compound):
@@ -201,6 +346,31 @@ class TexturingMapFlags(Compound):
         raw |= (self.filter_mode & 0xF) << 8
         raw |= (self.clamp_mode & 0xF) << 12
         write_u16(stream, raw)
+
+    def _packed(self) -> int:
+        raw = 0
+        raw |= (self.texture_index & 0xFF) << 0
+        raw |= (self.filter_mode & 0xF) << 8
+        raw |= (self.clamp_mode & 0xF) << 12
+        return raw
+
+    def __int__(self) -> int:
+        return self._packed()
+
+    def __index__(self) -> int:
+        return self._packed()
+
+    def __rshift__(self, n: int) -> int:
+        return self._packed() >> int(n)
+
+    def __lshift__(self, n: int) -> int:
+        return self._packed() << int(n)
+
+    def __and__(self, n: int) -> int:
+        return self._packed() & int(n)
+
+    def __or__(self, n: int) -> int:
+        return self._packed() | int(n)
 
 
 @dataclass(slots=True)
@@ -238,3 +408,32 @@ class TimeControllerFlags(Compound):
         raw |= (self.compute_scaled_time & 0x1) << 6
         raw |= (self.forced_update & 0x1) << 7
         write_u16(stream, raw)
+
+    def _packed(self) -> int:
+        raw = 0
+        raw |= (self.anim_type & 0x1) << 0
+        raw |= (self.cycle_type & 0x3) << 1
+        raw |= (self.active & 0x1) << 3
+        raw |= (self.play_backwards & 0x1) << 4
+        raw |= (self.manager_controlled & 0x1) << 5
+        raw |= (self.compute_scaled_time & 0x1) << 6
+        raw |= (self.forced_update & 0x1) << 7
+        return raw
+
+    def __int__(self) -> int:
+        return self._packed()
+
+    def __index__(self) -> int:
+        return self._packed()
+
+    def __rshift__(self, n: int) -> int:
+        return self._packed() >> int(n)
+
+    def __lshift__(self, n: int) -> int:
+        return self._packed() << int(n)
+
+    def __and__(self, n: int) -> int:
+        return self._packed() & int(n)
+
+    def __or__(self, n: int) -> int:
+        return self._packed() | int(n)

@@ -117,7 +117,7 @@ def open_nif_writer(
     without taking ownership. Writers always need seek (we patch block sizes
     after the fact); a non-seekable stream is rejected at construction time.
     """
-    if isinstance(target, (str, os.PathLike)):
+    if isinstance(target, str | os.PathLike):
         path = Path(os.fspath(target))
         raw = path.open("wb")
         try:

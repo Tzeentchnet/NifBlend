@@ -199,4 +199,4 @@ def test_real_bstrishape_vertex_data_cond(compiler) -> None:  # type: ignore[no-
     # Field: Vertex Data, cond="Data Size #GT# 0" → self.data_size > 0
     out = compiler.compile_cond("Data Size #GT# 0", _ident_passthrough)
     assert _is_valid_python_expr(out)
-    assert "self.data_size > 0" == out
+    assert out == "self.data_size > 0"

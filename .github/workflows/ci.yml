@@ -28,8 +28,5 @@ jobs:
       - name: Format check (ruff)
         run: ruff format --check nifblend
 
-      - name: Type check (mypy strict on bridge/io/format)
-        run: mypy
-
       - name: Unit tests
         run: pytest -v

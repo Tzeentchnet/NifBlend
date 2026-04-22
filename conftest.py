@@ -18,11 +18,40 @@ def _install_bpy_stub() -> None:
 
     bpy = types.ModuleType("bpy")
     bpy.props = types.ModuleType("bpy.props")
-    bpy.props.StringProperty = lambda **_kw: None  # type: ignore[attr-defined]
+
+    def _prop_factory(**_kw):  # - test stub
+        return None
+
+    for _name in (
+        "StringProperty",
+        "IntProperty",
+        "FloatProperty",
+        "BoolProperty",
+        "FloatVectorProperty",
+        "IntVectorProperty",
+        "EnumProperty",
+        "CollectionProperty",
+        "PointerProperty",
+    ):
+        setattr(bpy.props, _name, _prop_factory)
+
     bpy.types = types.ModuleType("bpy.types")
     bpy.types.Operator = type("Operator", (), {})  # type: ignore[attr-defined]
+    bpy.types.Panel = type("Panel", (), {})  # type: ignore[attr-defined]
     bpy.types.Menu = type("Menu", (), {})  # type: ignore[attr-defined]
+    bpy.types.UIList = type("UIList", (), {})  # type: ignore[attr-defined]
     bpy.types.Context = type("Context", (), {})  # type: ignore[attr-defined]
+    bpy.types.PropertyGroup = type("PropertyGroup", (), {})  # type: ignore[attr-defined]
+    bpy.types.AddonPreferences = type("AddonPreferences", (), {})  # type: ignore[attr-defined]
+    bpy.types.Material = type("Material", (), {})  # type: ignore[attr-defined]
+    bpy.types.Bone = type("Bone", (), {})  # type: ignore[attr-defined]
+    bpy.types.EditBone = type("EditBone", (), {})  # type: ignore[attr-defined]
+    bpy.types.Object = type("Object", (), {})  # type: ignore[attr-defined]
+    bpy.types.Armature = type("Armature", (), {})  # type: ignore[attr-defined]
+    bpy.types.VertexGroup = type("VertexGroup", (), {})  # type: ignore[attr-defined]
+    bpy.types.Mesh = type("Mesh", (), {})  # type: ignore[attr-defined]
+    bpy.types.UILayout = type("UILayout", (), {})  # type: ignore[attr-defined]
+    bpy.types.Scene = type("Scene", (), {})  # type: ignore[attr-defined]
 
     class _MenuStub:
         @staticmethod

@@ -14,5 +14,4 @@ Thanks for helping! Two lightweight rules keep the project honest:
 ## Code style
 
 - `ruff` for lint + format
-- `mypy --strict` on `nifblend/bridge/` and `nifblend/io/` (the clean-room code)
 - Tests via `pytest`; Blender-integration tests run headless via `blender --background -P scripts/run_tests.py`

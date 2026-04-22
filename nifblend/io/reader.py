@@ -151,9 +151,9 @@ def open_nif(
     a path is given the underlying file handle is owned by the reader and
     closed when it is closed.
     """
-    if isinstance(source, (bytes, bytearray, memoryview)):
+    if isinstance(source, bytes | bytearray | memoryview):
         return NifReader(io.BytesIO(bytes(source)), size=len(source), owned=True)
-    if isinstance(source, (str, os.PathLike)):
+    if isinstance(source, str | os.PathLike):
         path = Path(os.fspath(source))
         raw = path.open("rb")
         try:

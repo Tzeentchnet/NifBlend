@@ -17,11 +17,26 @@ select = [
 ignore = [
     "E501",  # line length handled by formatter
     "B008",  # function calls in argument defaults (Blender operators use this)
+    "RUF003", # `×` (multiplication sign) is intentional in dimension comments
 ]
 
 [lint.per-file-ignores]
 "nifblend/__init__.py" = ["F401"]
 "**/tests/**" = ["S101"]
+# Generated schema layer: emitter is best-effort. Ignore schema-driven naming
+# (lowercase `string` basic type) and rare precedence-clarity warnings in
+# vercond expressions that the cond-compiler emits literally from nif.xml.
+"nifblend/format/generated/**" = ["N801", "RUF021"]
+# Generated package re-exports submodule contents intentionally.
+"nifblend/format/generated/__init__.py" = ["F403"]
+# Blender requires `ADDONNAME_OT_name` operator class naming and uses bpy.props
+# descriptors as class attributes (which look like mutable defaults to ruff).
+"nifblend/ops/**" = ["N801", "RUF012"]
+# Same for sidebar Panel classes (`ADDONNAME_PT_name`) and AddonPreferences.
+"nifblend/ui/**" = ["N801", "RUF012"]
+"nifblend/preferences.py" = ["N801", "RUF012"]
+# `xml.etree.ElementTree as ET` is the universal idiom.
+"tools/codegen/**" = ["N817"]
 
 [format]
 quote-style = "double"

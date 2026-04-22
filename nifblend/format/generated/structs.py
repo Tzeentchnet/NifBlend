@@ -13,31 +13,53 @@ import numpy.typing as npt
 
 from nifblend.format.base import Compound, ReadContext
 from nifblend.format.primitives import (
-    read_u8, read_u16, read_u32, read_u64,
-    read_i8, read_i16, read_i32, read_i64,
-    read_f32, read_f16, read_bool,
-    read_array_u16, read_array_u32, read_array_f32,
-    read_vec3_array, read_vec2_array,
+    read_array_f32,
+    read_array_u16,
+    read_array_u32,
+    read_bool,
+    read_f16,
+    read_f32,
+    read_i8,
+    read_i16,
+    read_i32,
+    read_i64,
     read_sized_string,
-    write_u8, write_u16, write_u32, write_u64,
-    write_i8, write_i16, write_i32, write_i64,
-    write_f32, write_f16, write_bool,
-    write_array_u16, write_array_u32, write_array_f32,
-    write_vec3_array, write_vec2_array,
+    read_u8,
+    read_u16,
+    read_u32,
+    read_u64,
+    read_vec2_array,
+    read_vec3_array,
+    write_array_f32,
+    write_array_u16,
+    write_array_u32,
+    write_bool,
+    write_f16,
+    write_f32,
+    write_i8,
+    write_i16,
+    write_i32,
+    write_i64,
     write_sized_string,
+    write_u8,
+    write_u16,
+    write_u32,
+    write_u64,
+    write_vec2_array,
+    write_vec3_array,
 )
 from nifblend.format.versions import pack_version
 
 __all__ = ['AVObject', 'BSGeometryPerSegmentSharedData', 'BSGeometrySegmentData', 'BSGeometrySegmentSharedData', 'BSGeometrySubSegment', 'BSMesh', 'BSMeshArray', 'BSSPLuminanceParams', 'BSSPTranslucencyParams', 'BSSPWetnessParams', 'BSSkinBoneTrans', 'BSStreamHeader', 'BSTextureArray', 'BSVertexData', 'BSVertexDataSSE', 'BodyPartList', 'BoneData', 'BoneVertData', 'BoundingVolume', 'BoxBV', 'ByteArray', 'ByteColor3', 'ByteColor4', 'ByteVector3', 'CapsuleBV', 'Color3', 'Color4', 'ControlledBlock', 'ExportString', 'FilePath', 'Footer', 'FormatPrefs', 'HalfSpaceBV', 'HalfTexCoord', 'HalfVector3', 'Header', 'InterpBlendItem', 'Key', 'KeyGroup', 'LODRange', 'LegacyExtraData', 'MatchGroup', 'MaterialData', 'Matrix22', 'Matrix33', 'NiBound', 'NiBoundAABB', 'NiPlane', 'NiQuatTransform', 'NiTransform', 'PixelFormatComponent', 'QuatKey', 'Quaternion', 'ShaderTexDesc', 'SizedString', 'SizedString16', 'SkinPartition', 'StringPalette', 'TBC', 'TexCoord', 'TexDesc', 'Triangle', 'UnionBV', 'Vector3', 'Vector4', 'string']
-from .bitfields import AlphaFlags, BSGeometryDataFlags, BSVertexDesc, NiGeometryDataFlags, TexturingFlags, TexturingMapFlags, TimeControllerFlags  # noqa: F401
-from .enums import AlphaFormat, AlphaFunction, AnimNoteType, AnimType, ApplyMode, BSDismemberBodyPartType, BSLightingShaderType, BSShaderCRC32, BSShaderType, BSShaderType155, BillboardMode, BoundVolumeType, ConsistencyType, CycleType, EndianType, ImageType, KeyType, MipMapFormat, NiNBTMethod, PixelComponent, PixelFormat, PixelLayout, PixelRepresentation, PixelTiling, ShadeFlags, TestFunction, TexClampMode, TexFilterMode, TransformMethod, AccumFlags, BSPartFlag, BSShaderFlags, BSShaderFlags2, Fallout4ShaderPropertyFlags1, Fallout4ShaderPropertyFlags2, InterpBlendFlags, NiSwitchFlags, SkyrimShaderPropertyFlags1, SkyrimShaderPropertyFlags2, VertexAttribute  # noqa: F401
+from .bitfields import AlphaFlags, BSGeometryDataFlags, BSVertexDesc, NiGeometryDataFlags, TexturingFlags, TexturingMapFlags, TimeControllerFlags
+from .enums import AccumFlags, AlphaFormat, AlphaFunction, AnimNoteType, AnimType, ApplyMode, BSDismemberBodyPartType, BSLightingShaderType, BSPartFlag, BSShaderCRC32, BSShaderFlags, BSShaderFlags2, BSShaderType, BSShaderType155, BillboardMode, BoundVolumeType, ConsistencyType, CycleType, EndianType, Fallout4ShaderPropertyFlags1, Fallout4ShaderPropertyFlags2, ImageType, InterpBlendFlags, KeyType, MipMapFormat, NiNBTMethod, NiSwitchFlags, PixelComponent, PixelFormat, PixelLayout, PixelRepresentation, PixelTiling, ShadeFlags, SkyrimShaderPropertyFlags1, SkyrimShaderPropertyFlags2, TestFunction, TexClampMode, TexFilterMode, TransformMethod, VertexAttribute
 
 
 @dataclass(slots=True)
 class AVObject(Compound):
     """Used in NiDefaultAVObjectPalette."""
 
-    name: "SizedString | None" = None
+    name: SizedString | None = None
     av_object: int = 0
 
     @classmethod
@@ -84,33 +106,33 @@ class BSGeometrySegmentData(Compound):
     num_primitives: int = 0
     parent_array_index: int = 0
     num_sub_segments: int = 0
-    sub_segment: list["BSGeometrySubSegment | None"] = field(default_factory=list)
+    sub_segment: list[BSGeometrySubSegment | None] = field(default_factory=list)
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> BSGeometrySegmentData:
         self = cls()
-        if ((ctx.bs_version < 130)):
+        if (ctx.bs_version < 130):
             self.flags = read_u8(stream)
         self.start_index = read_u32(stream)
         self.num_primitives = read_u32(stream)
-        if ((ctx.bs_version >= 130)):
+        if (ctx.bs_version >= 130):
             self.parent_array_index = read_u32(stream)
-        if ((ctx.bs_version >= 130)):
+        if (ctx.bs_version >= 130):
             self.num_sub_segments = read_u32(stream)
-        if ((ctx.bs_version >= 130)):
+        if (ctx.bs_version >= 130):
             self.sub_segment = [BSGeometrySubSegment.read(stream, ctx) for _ in range(int(self.num_sub_segments))]
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
-        if ((ctx.bs_version < 130)):
+        if (ctx.bs_version < 130):
             write_u8(stream, self.flags)
         write_u32(stream, self.start_index)
         write_u32(stream, self.num_primitives)
-        if ((ctx.bs_version >= 130)):
+        if (ctx.bs_version >= 130):
             write_u32(stream, self.parent_array_index)
-        if ((ctx.bs_version >= 130)):
+        if (ctx.bs_version >= 130):
             write_u32(stream, self.num_sub_segments)
-        if ((ctx.bs_version >= 130)):
+        if (ctx.bs_version >= 130):
             for __v in self.sub_segment:
                 __v.write(stream, ctx)
 
@@ -120,8 +142,8 @@ class BSGeometrySegmentSharedData(Compound):
     num_segments: int = 0
     total_segments: int = 0
     segment_starts: npt.NDArray[Any] = field(default_factory=lambda: np.empty(0))
-    per_segment_data: list["BSGeometryPerSegmentSharedData | None"] = field(default_factory=list)
-    ssf_file: "SizedString16 | None" = None
+    per_segment_data: list[BSGeometryPerSegmentSharedData | None] = field(default_factory=list)
+    ssf_file: SizedString16 | None = None
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> BSGeometrySegmentSharedData:
@@ -172,7 +194,7 @@ class BSMesh(Compound):
     indices_size: int = 0
     num_verts: int = 0
     flags: int = 0
-    mesh_path: "SizedString | None" = None
+    mesh_path: SizedString | None = None
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> BSMesh:
@@ -193,19 +215,19 @@ class BSMesh(Compound):
 @dataclass(slots=True)
 class BSMeshArray(Compound):
     has_mesh: int = 0
-    mesh: "BSMesh | None" = None
+    mesh: BSMesh | None = None
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> BSMeshArray:
         self = cls()
         self.has_mesh = read_u8(stream)
-        if (self.has_mesh == 1):
+        if self.has_mesh == 1:
             self.mesh = BSMesh.read(stream, ctx)
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
         write_u8(stream, self.has_mesh)
-        if (self.has_mesh == 1):
+        if self.has_mesh == 1:
             self.mesh.write(stream, ctx)
 
 
@@ -234,7 +256,7 @@ class BSSPLuminanceParams(Compound):
 
 @dataclass(slots=True)
 class BSSPTranslucencyParams(Compound):
-    subsurface_color: "Color3 | None" = None
+    subsurface_color: Color3 | None = None
     transmissive_scale: float = 0.0
     turbulence: float = 0.0
     thick_object: bool = False
@@ -275,13 +297,13 @@ class BSSPWetnessParams(Compound):
         self.spec_scale = read_f32(stream)
         self.spec_power = read_f32(stream)
         self.min_var = read_f32(stream)
-        if ((ctx.bs_version == 130)):
+        if (ctx.bs_version == 130):
             self.env_map_scale = read_f32(stream)
         self.fresnel_power = read_f32(stream)
         self.metalness = read_f32(stream)
-        if ((ctx.bs_version > 130)):
+        if (ctx.bs_version > 130):
             self.unknown_1 = read_f32(stream)
-        if ((ctx.bs_version >= 155)):
+        if (ctx.bs_version >= 155):
             self.unknown_2 = read_f32(stream)
         return self
 
@@ -289,13 +311,13 @@ class BSSPWetnessParams(Compound):
         write_f32(stream, self.spec_scale)
         write_f32(stream, self.spec_power)
         write_f32(stream, self.min_var)
-        if ((ctx.bs_version == 130)):
+        if (ctx.bs_version == 130):
             write_f32(stream, self.env_map_scale)
         write_f32(stream, self.fresnel_power)
         write_f32(stream, self.metalness)
-        if ((ctx.bs_version > 130)):
+        if (ctx.bs_version > 130):
             write_f32(stream, self.unknown_1)
-        if ((ctx.bs_version >= 155)):
+        if (ctx.bs_version >= 155):
             write_f32(stream, self.unknown_2)
 
 
@@ -303,9 +325,9 @@ class BSSPWetnessParams(Compound):
 class BSSkinBoneTrans(Compound):
     """Fallout 4 Bone Transform"""
 
-    bounding_sphere: "NiBound | None" = None
-    rotation: "Matrix33 | None" = None
-    translation: "Vector3 | None" = None
+    bounding_sphere: NiBound | None = None
+    rotation: Matrix33 | None = None
+    translation: Vector3 | None = None
     scale: float = 0.0
 
     @classmethod
@@ -329,42 +351,42 @@ class BSStreamHeader(Compound):
     """Information about how the file was exported"""
 
     bs_version: int = 0
-    author: "ExportString | None" = None
+    author: ExportString | None = None
     unknown_int: int = 0
-    process_script: "ExportString | None" = None
-    export_script: "ExportString | None" = None
-    max_filepath: "ExportString | None" = None
+    process_script: ExportString | None = None
+    export_script: ExportString | None = None
+    max_filepath: ExportString | None = None
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> BSStreamHeader:
         self = cls()
         self.bs_version = read_u32(stream)
         self.author = ExportString.read(stream, ctx)
-        if (self.bs_version > 130):
+        if self.bs_version > 130:
             self.unknown_int = read_u32(stream)
-        if (self.bs_version < 131):
+        if self.bs_version < 131:
             self.process_script = ExportString.read(stream, ctx)
         self.export_script = ExportString.read(stream, ctx)
-        if (self.bs_version >= 103):
+        if self.bs_version >= 103:
             self.max_filepath = ExportString.read(stream, ctx)
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
         write_u32(stream, self.bs_version)
         self.author.write(stream, ctx)
-        if (self.bs_version > 130):
+        if self.bs_version > 130:
             write_u32(stream, self.unknown_int)
-        if (self.bs_version < 131):
+        if self.bs_version < 131:
             self.process_script.write(stream, ctx)
         self.export_script.write(stream, ctx)
-        if (self.bs_version >= 103):
+        if self.bs_version >= 103:
             self.max_filepath.write(stream, ctx)
 
 
 @dataclass(slots=True)
 class BSTextureArray(Compound):
     texture_array_width: int = 0
-    texture_array: list["SizedString | None"] = field(default_factory=list)
+    texture_array: list[SizedString | None] = field(default_factory=list)
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> BSTextureArray:
@@ -383,18 +405,18 @@ class BSTextureArray(Compound):
 class BSVertexData(Compound):
     """Byte fields for normal, tangent and bitangent map [0, 255] to [-1, 1]."""
 
-    vertex: "Vector3 | None" = None
+    vertex: Vector3 | None = None
     bitangent_x: float = 0.0
     unused_w: int = 0
-    vertex: "HalfVector3 | None" = None
+    vertex: HalfVector3 | None = None
     bitangent_x: float = 0.0
     unused_w: int = 0
-    uv: "HalfTexCoord | None" = None
-    normal: "ByteVector3 | None" = None
+    uv: HalfTexCoord | None = None
+    normal: ByteVector3 | None = None
     bitangent_y: int = 0
-    tangent: "ByteVector3 | None" = None
+    tangent: ByteVector3 | None = None
     bitangent_z: int = 0
-    vertex_colors: "ByteColor4 | None" = None
+    vertex_colors: ByteColor4 | None = None
     bone_weights: list[float] = field(default_factory=list)
     bone_indices: list[int] = field(default_factory=list)
     eye_data: float = 0.0
@@ -402,84 +424,84 @@ class BSVertexData(Compound):
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> BSVertexData:
         self = cls()
-        if ((ctx.arg & 0x401) == 0x401):
+        if (ctx.arg & 0x401) == 0x401:
             self.vertex = Vector3.read(stream, ctx)
-        if ((ctx.arg & 0x411) == 0x411):
+        if (ctx.arg & 0x411) == 0x411:
             self.bitangent_x = read_f32(stream)
-        if ((ctx.arg & 0x411) == 0x401):
+        if (ctx.arg & 0x411) == 0x401:
             self.unused_w = read_u32(stream)
-        if ((ctx.arg & 0x401) == 0x1):
+        if (ctx.arg & 0x401) == 0x1:
             self.vertex = HalfVector3.read(stream, ctx)
-        if ((ctx.arg & 0x411) == 0x11):
+        if (ctx.arg & 0x411) == 0x11:
             self.bitangent_x = read_f16(stream)
-        if ((ctx.arg & 0x411) == 0x1):
+        if (ctx.arg & 0x411) == 0x1:
             self.unused_w = read_u16(stream)
-        if ((ctx.arg & 0x2) != 0):
+        if (ctx.arg & 0x2) != 0:
             self.uv = HalfTexCoord.read(stream, ctx)
-        if ((ctx.arg & 0x8) != 0):
+        if (ctx.arg & 0x8) != 0:
             self.normal = ByteVector3.read(stream, ctx)
-        if ((ctx.arg & 0x8) != 0):
+        if (ctx.arg & 0x8) != 0:
             self.bitangent_y = read_u8(stream)
-        if ((ctx.arg & 0x18) == 0x18):
+        if (ctx.arg & 0x18) == 0x18:
             self.tangent = ByteVector3.read(stream, ctx)
-        if ((ctx.arg & 0x18) == 0x18):
+        if (ctx.arg & 0x18) == 0x18:
             self.bitangent_z = read_u8(stream)
-        if ((ctx.arg & 0x20) != 0):
+        if (ctx.arg & 0x20) != 0:
             self.vertex_colors = ByteColor4.read(stream, ctx)
-        if ((ctx.arg & 0x40) != 0):
-            self.bone_weights = [read_f16(stream) for _ in range(int(4))]
-        if ((ctx.arg & 0x40) != 0):
-            self.bone_indices = [read_u8(stream) for _ in range(int(4))]
-        if ((ctx.arg & 0x100) != 0):
+        if (ctx.arg & 0x40) != 0:
+            self.bone_weights = [read_f16(stream) for _ in range(4)]
+        if (ctx.arg & 0x40) != 0:
+            self.bone_indices = [read_u8(stream) for _ in range(4)]
+        if (ctx.arg & 0x100) != 0:
             self.eye_data = read_f32(stream)
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
-        if ((ctx.arg & 0x401) == 0x401):
+        if (ctx.arg & 0x401) == 0x401:
             self.vertex.write(stream, ctx)
-        if ((ctx.arg & 0x411) == 0x411):
+        if (ctx.arg & 0x411) == 0x411:
             write_f32(stream, self.bitangent_x)
-        if ((ctx.arg & 0x411) == 0x401):
+        if (ctx.arg & 0x411) == 0x401:
             write_u32(stream, self.unused_w)
-        if ((ctx.arg & 0x401) == 0x1):
+        if (ctx.arg & 0x401) == 0x1:
             self.vertex.write(stream, ctx)
-        if ((ctx.arg & 0x411) == 0x11):
+        if (ctx.arg & 0x411) == 0x11:
             write_f16(stream, self.bitangent_x)
-        if ((ctx.arg & 0x411) == 0x1):
+        if (ctx.arg & 0x411) == 0x1:
             write_u16(stream, self.unused_w)
-        if ((ctx.arg & 0x2) != 0):
+        if (ctx.arg & 0x2) != 0:
             self.uv.write(stream, ctx)
-        if ((ctx.arg & 0x8) != 0):
+        if (ctx.arg & 0x8) != 0:
             self.normal.write(stream, ctx)
-        if ((ctx.arg & 0x8) != 0):
+        if (ctx.arg & 0x8) != 0:
             write_u8(stream, self.bitangent_y)
-        if ((ctx.arg & 0x18) == 0x18):
+        if (ctx.arg & 0x18) == 0x18:
             self.tangent.write(stream, ctx)
-        if ((ctx.arg & 0x18) == 0x18):
+        if (ctx.arg & 0x18) == 0x18:
             write_u8(stream, self.bitangent_z)
-        if ((ctx.arg & 0x20) != 0):
+        if (ctx.arg & 0x20) != 0:
             self.vertex_colors.write(stream, ctx)
-        if ((ctx.arg & 0x40) != 0):
+        if (ctx.arg & 0x40) != 0:
             for __v in self.bone_weights:
                 write_f16(stream, __v)
-        if ((ctx.arg & 0x40) != 0):
+        if (ctx.arg & 0x40) != 0:
             for __v in self.bone_indices:
                 write_u8(stream, __v)
-        if ((ctx.arg & 0x100) != 0):
+        if (ctx.arg & 0x100) != 0:
             write_f32(stream, self.eye_data)
 
 
 @dataclass(slots=True)
 class BSVertexDataSSE(Compound):
-    vertex: "Vector3 | None" = None
+    vertex: Vector3 | None = None
     bitangent_x: float = 0.0
     unused_w: int = 0
-    uv: "HalfTexCoord | None" = None
-    normal: "ByteVector3 | None" = None
+    uv: HalfTexCoord | None = None
+    normal: ByteVector3 | None = None
     bitangent_y: int = 0
-    tangent: "ByteVector3 | None" = None
+    tangent: ByteVector3 | None = None
     bitangent_z: int = 0
-    vertex_colors: "ByteColor4 | None" = None
+    vertex_colors: ByteColor4 | None = None
     bone_weights: list[float] = field(default_factory=list)
     bone_indices: list[int] = field(default_factory=list)
     eye_data: float = 0.0
@@ -487,58 +509,58 @@ class BSVertexDataSSE(Compound):
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> BSVertexDataSSE:
         self = cls()
-        if ((ctx.arg & 0x1) != 0):
+        if (ctx.arg & 0x1) != 0:
             self.vertex = Vector3.read(stream, ctx)
-        if ((ctx.arg & 0x11) == 0x11):
+        if (ctx.arg & 0x11) == 0x11:
             self.bitangent_x = read_f32(stream)
-        if ((ctx.arg & 0x11) == 0x1):
+        if (ctx.arg & 0x11) == 0x1:
             self.unused_w = read_u32(stream)
-        if ((ctx.arg & 0x2) != 0):
+        if (ctx.arg & 0x2) != 0:
             self.uv = HalfTexCoord.read(stream, ctx)
-        if ((ctx.arg & 0x8) != 0):
+        if (ctx.arg & 0x8) != 0:
             self.normal = ByteVector3.read(stream, ctx)
-        if ((ctx.arg & 0x8) != 0):
+        if (ctx.arg & 0x8) != 0:
             self.bitangent_y = read_u8(stream)
-        if ((ctx.arg & 0x18) == 0x18):
+        if (ctx.arg & 0x18) == 0x18:
             self.tangent = ByteVector3.read(stream, ctx)
-        if ((ctx.arg & 0x18) == 0x18):
+        if (ctx.arg & 0x18) == 0x18:
             self.bitangent_z = read_u8(stream)
-        if ((ctx.arg & 0x20) != 0):
+        if (ctx.arg & 0x20) != 0:
             self.vertex_colors = ByteColor4.read(stream, ctx)
-        if ((ctx.arg & 0x40) != 0):
-            self.bone_weights = [read_f16(stream) for _ in range(int(4))]
-        if ((ctx.arg & 0x40) != 0):
-            self.bone_indices = [read_u8(stream) for _ in range(int(4))]
-        if ((ctx.arg & 0x100) != 0):
+        if (ctx.arg & 0x40) != 0:
+            self.bone_weights = [read_f16(stream) for _ in range(4)]
+        if (ctx.arg & 0x40) != 0:
+            self.bone_indices = [read_u8(stream) for _ in range(4)]
+        if (ctx.arg & 0x100) != 0:
             self.eye_data = read_f32(stream)
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
-        if ((ctx.arg & 0x1) != 0):
+        if (ctx.arg & 0x1) != 0:
             self.vertex.write(stream, ctx)
-        if ((ctx.arg & 0x11) == 0x11):
+        if (ctx.arg & 0x11) == 0x11:
             write_f32(stream, self.bitangent_x)
-        if ((ctx.arg & 0x11) == 0x1):
+        if (ctx.arg & 0x11) == 0x1:
             write_u32(stream, self.unused_w)
-        if ((ctx.arg & 0x2) != 0):
+        if (ctx.arg & 0x2) != 0:
             self.uv.write(stream, ctx)
-        if ((ctx.arg & 0x8) != 0):
+        if (ctx.arg & 0x8) != 0:
             self.normal.write(stream, ctx)
-        if ((ctx.arg & 0x8) != 0):
+        if (ctx.arg & 0x8) != 0:
             write_u8(stream, self.bitangent_y)
-        if ((ctx.arg & 0x18) == 0x18):
+        if (ctx.arg & 0x18) == 0x18:
             self.tangent.write(stream, ctx)
-        if ((ctx.arg & 0x18) == 0x18):
+        if (ctx.arg & 0x18) == 0x18:
             write_u8(stream, self.bitangent_z)
-        if ((ctx.arg & 0x20) != 0):
+        if (ctx.arg & 0x20) != 0:
             self.vertex_colors.write(stream, ctx)
-        if ((ctx.arg & 0x40) != 0):
+        if (ctx.arg & 0x40) != 0:
             for __v in self.bone_weights:
                 write_f16(stream, __v)
-        if ((ctx.arg & 0x40) != 0):
+        if (ctx.arg & 0x40) != 0:
             for __v in self.bone_indices:
                 write_u8(stream, __v)
-        if ((ctx.arg & 0x100) != 0):
+        if (ctx.arg & 0x100) != 0:
             write_f32(stream, self.eye_data)
 
 
@@ -557,19 +579,19 @@ class BodyPartList(Compound):
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
-        write_u16(stream, int(self.part_flag))
-        write_u16(stream, int(self.body_part))
+        write_u16(stream, self.part_flag)
+        write_u16(stream, self.body_part)
 
 
 @dataclass(slots=True)
 class BoneData(Compound):
     """NiSkinData::BoneData. Skinning data component."""
 
-    skin_transform: "NiTransform | None" = None
-    bounding_sphere: "NiBound | None" = None
+    skin_transform: NiTransform | None = None
+    bounding_sphere: NiBound | None = None
     num_vertices: int = 0
-    vertex_weights: list["BoneVertData | None"] = field(default_factory=list)
-    vertex_weights: list["BoneVertData | None"] = field(default_factory=list)
+    vertex_weights: list[BoneVertData | None] = field(default_factory=list)
+    vertex_weights: list[BoneVertData | None] = field(default_factory=list)
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> BoneData:
@@ -579,7 +601,7 @@ class BoneData(Compound):
         self.num_vertices = read_u16(stream)
         if ctx.version <= pack_version(4, 2, 1, 0):
             self.vertex_weights = [BoneVertData.read(stream, ctx) for _ in range(int(self.num_vertices))]
-        if ctx.version >= pack_version(4, 2, 2, 0) and (ctx.arg != 0):
+        if (ctx.version >= pack_version(4, 2, 2, 0)) and (ctx.arg != 0):
             self.vertex_weights = [BoneVertData.read(stream, ctx) for _ in range(int(self.num_vertices))]
         return self
 
@@ -590,7 +612,7 @@ class BoneData(Compound):
         if ctx.version <= pack_version(4, 2, 1, 0):
             for __v in self.vertex_weights:
                 __v.write(stream, ctx)
-        if ctx.version >= pack_version(4, 2, 2, 0) and (ctx.arg != 0):
+        if (ctx.version >= pack_version(4, 2, 2, 0)) and (ctx.arg != 0):
             for __v in self.vertex_weights:
                 __v.write(stream, ctx)
 
@@ -617,39 +639,39 @@ class BoneVertData(Compound):
 @dataclass(slots=True)
 class BoundingVolume(Compound):
     collision_type: int = 0
-    sphere: "NiBound | None" = None
-    box: "BoxBV | None" = None
-    capsule: "CapsuleBV | None" = None
-    union_bv: "UnionBV | None" = None
-    half_space: "HalfSpaceBV | None" = None
+    sphere: NiBound | None = None
+    box: BoxBV | None = None
+    capsule: CapsuleBV | None = None
+    union_bv: UnionBV | None = None
+    half_space: HalfSpaceBV | None = None
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> BoundingVolume:
         self = cls()
         self.collision_type = read_u32(stream)
-        if (self.collision_type == 0):
+        if self.collision_type == 0:
             self.sphere = NiBound.read(stream, ctx)
-        if (self.collision_type == 1):
+        if self.collision_type == 1:
             self.box = BoxBV.read(stream, ctx)
-        if (self.collision_type == 2):
+        if self.collision_type == 2:
             self.capsule = CapsuleBV.read(stream, ctx)
-        if (self.collision_type == 4):
+        if self.collision_type == 4:
             self.union_bv = UnionBV.read(stream, ctx)
-        if (self.collision_type == 5):
+        if self.collision_type == 5:
             self.half_space = HalfSpaceBV.read(stream, ctx)
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
-        write_u32(stream, int(self.collision_type))
-        if (self.collision_type == 0):
+        write_u32(stream, self.collision_type)
+        if self.collision_type == 0:
             self.sphere.write(stream, ctx)
-        if (self.collision_type == 1):
+        if self.collision_type == 1:
             self.box.write(stream, ctx)
-        if (self.collision_type == 2):
+        if self.collision_type == 2:
             self.capsule.write(stream, ctx)
-        if (self.collision_type == 4):
+        if self.collision_type == 4:
             self.union_bv.write(stream, ctx)
-        if (self.collision_type == 5):
+        if self.collision_type == 5:
             self.half_space.write(stream, ctx)
 
 
@@ -657,15 +679,15 @@ class BoundingVolume(Compound):
 class BoxBV(Compound):
     """Box Bounding Volume"""
 
-    center: "Vector3 | None" = None
-    axis: list["Vector3 | None"] = field(default_factory=list)
-    extent: "Vector3 | None" = None
+    center: Vector3 | None = None
+    axis: list[Vector3 | None] = field(default_factory=list)
+    extent: Vector3 | None = None
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> BoxBV:
         self = cls()
         self.center = Vector3.read(stream, ctx)
-        self.axis = [Vector3.read(stream, ctx) for _ in range(int(3))]
+        self.axis = [Vector3.read(stream, ctx) for _ in range(3)]
         self.extent = Vector3.read(stream, ctx)
         return self
 
@@ -769,8 +791,8 @@ class ByteVector3(Compound):
 class CapsuleBV(Compound):
     """Capsule Bounding Volume"""
 
-    center: "Vector3 | None" = None
-    origin: "Vector3 | None" = None
+    center: Vector3 | None = None
+    origin: Vector3 | None = None
     extent: float = 0.0
     radius: float = 0.0
 
@@ -844,28 +866,28 @@ class ControlledBlock(Compound):
         For Interpolator ID, NiInterpController::GetInterpolatorID() virtual function returns a string formatted specifically for the derived type.
         The string formats are documented on the relevant niobject blocks."""
 
-    target_name: "SizedString | None" = None
+    target_name: SizedString | None = None
     interpolator: int = 0
     controller: int = 0
     blend_interpolator: int = 0
     blend_index: int = 0
     priority: int = 0
-    node_name: "string | None" = None
-    property_type: "string | None" = None
-    controller_type: "string | None" = None
-    controller_id: "string | None" = None
-    interpolator_id: "string | None" = None
+    node_name: string | None = None
+    property_type: string | None = None
+    controller_type: string | None = None
+    controller_id: string | None = None
+    interpolator_id: string | None = None
     string_palette: int = 0
     node_name_offset: int = 0
     property_type_offset: int = 0
     controller_type_offset: int = 0
     controller_id_offset: int = 0
     interpolator_id_offset: int = 0
-    node_name: "string | None" = None
-    property_type: "string | None" = None
-    controller_type: "string | None" = None
-    controller_id: "string | None" = None
-    interpolator_id: "string | None" = None
+    node_name: string | None = None
+    property_type: string | None = None
+    controller_type: string | None = None
+    controller_id: string | None = None
+    interpolator_id: string | None = None
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> ControlledBlock:
@@ -876,33 +898,33 @@ class ControlledBlock(Compound):
             self.interpolator = read_i32(stream)
         if ctx.version <= pack_version(20, 5, 0, 0):
             self.controller = read_i32(stream)
-        if ctx.version >= pack_version(10, 1, 0, 104) and ctx.version <= pack_version(10, 1, 0, 110):
+        if (ctx.version >= pack_version(10, 1, 0, 104)) and (ctx.version <= pack_version(10, 1, 0, 110)):
             self.blend_interpolator = read_i32(stream)
-        if ctx.version >= pack_version(10, 1, 0, 104) and ctx.version <= pack_version(10, 1, 0, 110):
+        if (ctx.version >= pack_version(10, 1, 0, 104)) and (ctx.version <= pack_version(10, 1, 0, 110)):
             self.blend_index = read_u16(stream)
-        if ctx.version >= pack_version(10, 1, 0, 106) and ((ctx.bs_version > 0)):
+        if (ctx.version >= pack_version(10, 1, 0, 106)) and ((ctx.bs_version > 0)):
             self.priority = read_u8(stream)
-        if ctx.version >= pack_version(10, 1, 0, 104) and ctx.version <= pack_version(10, 1, 0, 113):
+        if (ctx.version >= pack_version(10, 1, 0, 104)) and (ctx.version <= pack_version(10, 1, 0, 113)):
             self.node_name = string.read(stream, ctx)
-        if ctx.version >= pack_version(10, 1, 0, 104) and ctx.version <= pack_version(10, 1, 0, 113):
+        if (ctx.version >= pack_version(10, 1, 0, 104)) and (ctx.version <= pack_version(10, 1, 0, 113)):
             self.property_type = string.read(stream, ctx)
-        if ctx.version >= pack_version(10, 1, 0, 104) and ctx.version <= pack_version(10, 1, 0, 113):
+        if (ctx.version >= pack_version(10, 1, 0, 104)) and (ctx.version <= pack_version(10, 1, 0, 113)):
             self.controller_type = string.read(stream, ctx)
-        if ctx.version >= pack_version(10, 1, 0, 104) and ctx.version <= pack_version(10, 1, 0, 113):
+        if (ctx.version >= pack_version(10, 1, 0, 104)) and (ctx.version <= pack_version(10, 1, 0, 113)):
             self.controller_id = string.read(stream, ctx)
-        if ctx.version >= pack_version(10, 1, 0, 104) and ctx.version <= pack_version(10, 1, 0, 113):
+        if (ctx.version >= pack_version(10, 1, 0, 104)) and (ctx.version <= pack_version(10, 1, 0, 113)):
             self.interpolator_id = string.read(stream, ctx)
-        if ctx.version >= pack_version(10, 2, 0, 0) and ctx.version <= pack_version(20, 1, 0, 0):
+        if (ctx.version >= pack_version(10, 2, 0, 0)) and (ctx.version <= pack_version(20, 1, 0, 0)):
             self.string_palette = read_i32(stream)
-        if ctx.version >= pack_version(10, 2, 0, 0) and ctx.version <= pack_version(20, 1, 0, 0):
+        if (ctx.version >= pack_version(10, 2, 0, 0)) and (ctx.version <= pack_version(20, 1, 0, 0)):
             self.node_name_offset = read_u32(stream)
-        if ctx.version >= pack_version(10, 2, 0, 0) and ctx.version <= pack_version(20, 1, 0, 0):
+        if (ctx.version >= pack_version(10, 2, 0, 0)) and (ctx.version <= pack_version(20, 1, 0, 0)):
             self.property_type_offset = read_u32(stream)
-        if ctx.version >= pack_version(10, 2, 0, 0) and ctx.version <= pack_version(20, 1, 0, 0):
+        if (ctx.version >= pack_version(10, 2, 0, 0)) and (ctx.version <= pack_version(20, 1, 0, 0)):
             self.controller_type_offset = read_u32(stream)
-        if ctx.version >= pack_version(10, 2, 0, 0) and ctx.version <= pack_version(20, 1, 0, 0):
+        if (ctx.version >= pack_version(10, 2, 0, 0)) and (ctx.version <= pack_version(20, 1, 0, 0)):
             self.controller_id_offset = read_u32(stream)
-        if ctx.version >= pack_version(10, 2, 0, 0) and ctx.version <= pack_version(20, 1, 0, 0):
+        if (ctx.version >= pack_version(10, 2, 0, 0)) and (ctx.version <= pack_version(20, 1, 0, 0)):
             self.interpolator_id_offset = read_u32(stream)
         if ctx.version >= pack_version(20, 1, 0, 1):
             self.node_name = string.read(stream, ctx)
@@ -923,33 +945,33 @@ class ControlledBlock(Compound):
             write_i32(stream, self.interpolator)
         if ctx.version <= pack_version(20, 5, 0, 0):
             write_i32(stream, self.controller)
-        if ctx.version >= pack_version(10, 1, 0, 104) and ctx.version <= pack_version(10, 1, 0, 110):
+        if (ctx.version >= pack_version(10, 1, 0, 104)) and (ctx.version <= pack_version(10, 1, 0, 110)):
             write_i32(stream, self.blend_interpolator)
-        if ctx.version >= pack_version(10, 1, 0, 104) and ctx.version <= pack_version(10, 1, 0, 110):
+        if (ctx.version >= pack_version(10, 1, 0, 104)) and (ctx.version <= pack_version(10, 1, 0, 110)):
             write_u16(stream, self.blend_index)
-        if ctx.version >= pack_version(10, 1, 0, 106) and ((ctx.bs_version > 0)):
+        if (ctx.version >= pack_version(10, 1, 0, 106)) and ((ctx.bs_version > 0)):
             write_u8(stream, self.priority)
-        if ctx.version >= pack_version(10, 1, 0, 104) and ctx.version <= pack_version(10, 1, 0, 113):
+        if (ctx.version >= pack_version(10, 1, 0, 104)) and (ctx.version <= pack_version(10, 1, 0, 113)):
             self.node_name.write(stream, ctx)
-        if ctx.version >= pack_version(10, 1, 0, 104) and ctx.version <= pack_version(10, 1, 0, 113):
+        if (ctx.version >= pack_version(10, 1, 0, 104)) and (ctx.version <= pack_version(10, 1, 0, 113)):
             self.property_type.write(stream, ctx)
-        if ctx.version >= pack_version(10, 1, 0, 104) and ctx.version <= pack_version(10, 1, 0, 113):
+        if (ctx.version >= pack_version(10, 1, 0, 104)) and (ctx.version <= pack_version(10, 1, 0, 113)):
             self.controller_type.write(stream, ctx)
-        if ctx.version >= pack_version(10, 1, 0, 104) and ctx.version <= pack_version(10, 1, 0, 113):
+        if (ctx.version >= pack_version(10, 1, 0, 104)) and (ctx.version <= pack_version(10, 1, 0, 113)):
             self.controller_id.write(stream, ctx)
-        if ctx.version >= pack_version(10, 1, 0, 104) and ctx.version <= pack_version(10, 1, 0, 113):
+        if (ctx.version >= pack_version(10, 1, 0, 104)) and (ctx.version <= pack_version(10, 1, 0, 113)):
             self.interpolator_id.write(stream, ctx)
-        if ctx.version >= pack_version(10, 2, 0, 0) and ctx.version <= pack_version(20, 1, 0, 0):
+        if (ctx.version >= pack_version(10, 2, 0, 0)) and (ctx.version <= pack_version(20, 1, 0, 0)):
             write_i32(stream, self.string_palette)
-        if ctx.version >= pack_version(10, 2, 0, 0) and ctx.version <= pack_version(20, 1, 0, 0):
+        if (ctx.version >= pack_version(10, 2, 0, 0)) and (ctx.version <= pack_version(20, 1, 0, 0)):
             write_u32(stream, self.node_name_offset)
-        if ctx.version >= pack_version(10, 2, 0, 0) and ctx.version <= pack_version(20, 1, 0, 0):
+        if (ctx.version >= pack_version(10, 2, 0, 0)) and (ctx.version <= pack_version(20, 1, 0, 0)):
             write_u32(stream, self.property_type_offset)
-        if ctx.version >= pack_version(10, 2, 0, 0) and ctx.version <= pack_version(20, 1, 0, 0):
+        if (ctx.version >= pack_version(10, 2, 0, 0)) and (ctx.version <= pack_version(20, 1, 0, 0)):
             write_u32(stream, self.controller_type_offset)
-        if ctx.version >= pack_version(10, 2, 0, 0) and ctx.version <= pack_version(20, 1, 0, 0):
+        if (ctx.version >= pack_version(10, 2, 0, 0)) and (ctx.version <= pack_version(20, 1, 0, 0)):
             write_u32(stream, self.controller_id_offset)
-        if ctx.version >= pack_version(10, 2, 0, 0) and ctx.version <= pack_version(20, 1, 0, 0):
+        if (ctx.version >= pack_version(10, 2, 0, 0)) and (ctx.version <= pack_version(20, 1, 0, 0)):
             write_u32(stream, self.interpolator_id_offset)
         if ctx.version >= pack_version(20, 1, 0, 1):
             self.node_name.write(stream, ctx)
@@ -987,7 +1009,7 @@ class ExportString(Compound):
 class FilePath(Compound):
     """A string that contains the path to a file."""
 
-    string: "SizedString | None" = None
+    string: SizedString | None = None
     index: int = 0
 
     @classmethod
@@ -1047,15 +1069,15 @@ class FormatPrefs(Compound):
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
-        write_u32(stream, int(self.pixel_layout))
-        write_u32(stream, int(self.use_mipmaps))
-        write_u32(stream, int(self.alpha_format))
+        write_u32(stream, self.pixel_layout)
+        write_u32(stream, self.use_mipmaps)
+        write_u32(stream, self.alpha_format)
 
 
 @dataclass(slots=True)
 class HalfSpaceBV(Compound):
-    plane: "NiPlane | None" = None
-    center: "Vector3 | None" = None
+    plane: NiPlane | None = None
+    center: Vector3 | None = None
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> HalfSpaceBV:
@@ -1120,16 +1142,16 @@ class Header(Compound):
     endian_type: int = 0
     user_version: int = 0
     num_blocks: int = 0
-    bs_header: "BSStreamHeader | None" = None
-    metadata: "ByteArray | None" = None
+    bs_header: BSStreamHeader | None = None
+    metadata: ByteArray | None = None
     num_block_types: int = 0
-    block_types: list["SizedString | None"] = field(default_factory=list)
+    block_types: list[SizedString | None] = field(default_factory=list)
     block_type_hashes: npt.NDArray[Any] = field(default_factory=lambda: np.empty(0))
     block_type_index: list[int] = field(default_factory=list)
     block_size: npt.NDArray[Any] = field(default_factory=lambda: np.empty(0))
     num_strings: int = 0
     max_string_length: int = 0
-    strings: list["SizedString | None"] = field(default_factory=list)
+    strings: list[SizedString | None] = field(default_factory=list)
     num_groups: int = 0
     groups: npt.NDArray[Any] = field(default_factory=lambda: np.empty(0))
 
@@ -1148,15 +1170,15 @@ class Header(Compound):
             self.user_version = read_u32(stream)
         if ctx.version >= pack_version(3, 1, 0, 1):
             self.num_blocks = read_u32(stream)
-        if ((ctx.version == pack_version(10, 0, 1, 2)) or ((ctx.version == pack_version(20, 2, 0, 7)) or (ctx.version == pack_version(20, 0, 0, 5)) or ((ctx.version >= pack_version(10, 1, 0, 0)) and (ctx.version <= pack_version(20, 0, 0, 4)) and (ctx.user_version <= 11))) and (ctx.user_version >= 3)):
+        if (ctx.version == pack_version(10, 0, 1, 2)) or ((ctx.version == pack_version(20, 2, 0, 7)) or (ctx.version == pack_version(20, 0, 0, 5)) or ((ctx.version >= pack_version(10, 1, 0, 0)) and (ctx.version <= pack_version(20, 0, 0, 4)) and (ctx.user_version <= 11))) and (ctx.user_version >= 3):
             self.bs_header = BSStreamHeader.read(stream, ctx)
         if ctx.version >= pack_version(30, 0, 0, 0):
             self.metadata = ByteArray.read(stream, ctx)
         if ctx.version >= pack_version(5, 0, 0, 1):
             self.num_block_types = read_u16(stream)
-        if ctx.version >= pack_version(5, 0, 0, 1) and (self.version != pack_version(20, 3, 1, 2)):
+        if (ctx.version >= pack_version(5, 0, 0, 1)) and (self.version != pack_version(20, 3, 1, 2)):
             self.block_types = [SizedString.read(stream, ctx) for _ in range(int(self.num_block_types))]
-        if ctx.version >= pack_version(20, 3, 1, 2) and ctx.version <= pack_version(20, 3, 1, 2):
+        if (ctx.version >= pack_version(20, 3, 1, 2)) and (ctx.version <= pack_version(20, 3, 1, 2)):
             self.block_type_hashes = read_array_u32(stream, int(self.num_block_types))
         if ctx.version >= pack_version(5, 0, 0, 1):
             self.block_type_index = [read_u16(stream) for _ in range(int(self.num_blocks))]
@@ -1182,21 +1204,21 @@ class Header(Compound):
         if ctx.version >= pack_version(3, 1, 0, 1):
             write_u32(stream, self.version)
         if ctx.version >= pack_version(20, 0, 0, 3):
-            write_u8(stream, int(self.endian_type))
+            write_u8(stream, self.endian_type)
         if ctx.version >= pack_version(10, 0, 1, 8):
             write_u32(stream, self.user_version)
         if ctx.version >= pack_version(3, 1, 0, 1):
             write_u32(stream, self.num_blocks)
-        if ((ctx.version == pack_version(10, 0, 1, 2)) or ((ctx.version == pack_version(20, 2, 0, 7)) or (ctx.version == pack_version(20, 0, 0, 5)) or ((ctx.version >= pack_version(10, 1, 0, 0)) and (ctx.version <= pack_version(20, 0, 0, 4)) and (ctx.user_version <= 11))) and (ctx.user_version >= 3)):
+        if (ctx.version == pack_version(10, 0, 1, 2)) or ((ctx.version == pack_version(20, 2, 0, 7)) or (ctx.version == pack_version(20, 0, 0, 5)) or ((ctx.version >= pack_version(10, 1, 0, 0)) and (ctx.version <= pack_version(20, 0, 0, 4)) and (ctx.user_version <= 11))) and (ctx.user_version >= 3):
             self.bs_header.write(stream, ctx)
         if ctx.version >= pack_version(30, 0, 0, 0):
             self.metadata.write(stream, ctx)
         if ctx.version >= pack_version(5, 0, 0, 1):
             write_u16(stream, self.num_block_types)
-        if ctx.version >= pack_version(5, 0, 0, 1) and (self.version != pack_version(20, 3, 1, 2)):
+        if (ctx.version >= pack_version(5, 0, 0, 1)) and (self.version != pack_version(20, 3, 1, 2)):
             for __v in self.block_types:
                 __v.write(stream, ctx)
-        if ctx.version >= pack_version(20, 3, 1, 2) and ctx.version <= pack_version(20, 3, 1, 2):
+        if (ctx.version >= pack_version(20, 3, 1, 2)) and (ctx.version <= pack_version(20, 3, 1, 2)):
             write_array_u32(stream, self.block_type_hashes)
         if ctx.version >= pack_version(5, 0, 0, 1):
             for __v in self.block_type_index:
@@ -1259,33 +1281,33 @@ class Key(Compound):
     value: Any = None
     forward: Any = None
     backward: Any = None
-    tbc: "TBC | None" = None
+    tbc: TBC | None = None
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> Key:
         self = cls()
         self.time = read_f32(stream)
         # CODEGEN-TODO: unknown type '#T#' for field 'Value'
-        if (ctx.arg == 2):
+        if ctx.arg == 2:
             # CODEGEN-TODO: unknown type '#T#' for field 'Forward'
             pass
-        if (ctx.arg == 2):
+        if ctx.arg == 2:
             # CODEGEN-TODO: unknown type '#T#' for field 'Backward'
             pass
-        if (ctx.arg == 3):
+        if ctx.arg == 3:
             self.tbc = TBC.read(stream, ctx)
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
         write_f32(stream, self.time)
         # CODEGEN-TODO: unknown type write '#T#'
-        if (ctx.arg == 2):
+        if ctx.arg == 2:
             # CODEGEN-TODO: unknown type write '#T#'
             pass
-        if (ctx.arg == 2):
+        if ctx.arg == 2:
             # CODEGEN-TODO: unknown type write '#T#'
             pass
-        if (ctx.arg == 3):
+        if ctx.arg == 3:
             self.tbc.write(stream, ctx)
 
 
@@ -1295,23 +1317,31 @@ class KeyGroup(Compound):
 
     num_keys: int = 0
     interpolation: int = 0
-    keys: list["Key | None"] = field(default_factory=list)
+    keys: list[Key | None] = field(default_factory=list)
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> KeyGroup:
         self = cls()
         self.num_keys = read_u32(stream)
-        if (self.num_keys != 0):
+        if self.num_keys != 0:
             self.interpolation = read_u32(stream)
-        self.keys = [Key.read(stream, ctx) for _ in range(int(self.num_keys))]
+        ctx.push_arg(self.interpolation)
+        try:
+            self.keys = [Key.read(stream, ctx) for _ in range(int(self.num_keys))]
+        finally:
+            ctx.pop_arg()
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
         write_u32(stream, self.num_keys)
-        if (self.num_keys != 0):
-            write_u32(stream, int(self.interpolation))
-        for __v in self.keys:
-            __v.write(stream, ctx)
+        if self.num_keys != 0:
+            write_u32(stream, self.interpolation)
+        ctx.push_arg(self.interpolation)
+        try:
+            for __v in self.keys:
+                __v.write(stream, ctx)
+        finally:
+            ctx.pop_arg()
 
 
 @dataclass(slots=True)
@@ -1328,7 +1358,7 @@ class LODRange(Compound):
         self.near_extent = read_f32(stream)
         self.far_extent = read_f32(stream)
         if ctx.version <= pack_version(3, 1):
-            self.unknown_ints = read_array_u32(stream, int(3))
+            self.unknown_ints = read_array_u32(stream, 3)
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
@@ -1343,31 +1373,31 @@ class LegacyExtraData(Compound):
     """Extra Data for pre-3.0 versions"""
 
     has_extra_data: bool = False
-    extra_prop_name: "SizedString | None" = None
+    extra_prop_name: SizedString | None = None
     extra_ref_id: int = 0
-    extra_string: "SizedString | None" = None
+    extra_string: SizedString | None = None
     unknown_byte_1: int = 0
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> LegacyExtraData:
         self = cls()
         self.has_extra_data = read_bool(stream)
-        if (self.has_extra_data):
+        if self.has_extra_data:
             self.extra_prop_name = SizedString.read(stream, ctx)
-        if (self.has_extra_data):
+        if self.has_extra_data:
             self.extra_ref_id = read_u32(stream)
-        if (self.has_extra_data):
+        if self.has_extra_data:
             self.extra_string = SizedString.read(stream, ctx)
         self.unknown_byte_1 = read_u8(stream)
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
         write_bool(stream, self.has_extra_data)
-        if (self.has_extra_data):
+        if self.has_extra_data:
             self.extra_prop_name.write(stream, ctx)
-        if (self.has_extra_data):
+        if self.has_extra_data:
             write_u32(stream, self.extra_ref_id)
-        if (self.has_extra_data):
+        if self.has_extra_data:
             self.extra_string.write(stream, ctx)
         write_u8(stream, self.unknown_byte_1)
 
@@ -1394,7 +1424,7 @@ class MatchGroup(Compound):
 @dataclass(slots=True)
 class MaterialData(Compound):
     has_shader: bool = False
-    shader_name: "string | None" = None
+    shader_name: string | None = None
     shader_extra_data: int = 0
     num_materials: int = 0
     material_name: list[int] = field(default_factory=list)
@@ -1407,11 +1437,11 @@ class MaterialData(Compound):
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> MaterialData:
         self = cls()
-        if ctx.version >= pack_version(10, 0, 1, 0) and ctx.version <= pack_version(20, 1, 0, 3):
+        if (ctx.version >= pack_version(10, 0, 1, 0)) and (ctx.version <= pack_version(20, 1, 0, 3)):
             self.has_shader = read_bool(stream)
-        if ctx.version >= pack_version(10, 0, 1, 0) and ctx.version <= pack_version(20, 1, 0, 3) and (self.has_shader):
+        if (ctx.version >= pack_version(10, 0, 1, 0)) and (ctx.version <= pack_version(20, 1, 0, 3)) and (self.has_shader):
             self.shader_name = string.read(stream, ctx)
-        if ctx.version >= pack_version(10, 0, 1, 0) and ctx.version <= pack_version(20, 1, 0, 3) and (self.has_shader):
+        if (ctx.version >= pack_version(10, 0, 1, 0)) and (ctx.version <= pack_version(20, 1, 0, 3)) and (self.has_shader):
             self.shader_extra_data = read_i32(stream)
         if ctx.version >= pack_version(20, 2, 0, 5):
             self.num_materials = read_u32(stream)
@@ -1421,20 +1451,20 @@ class MaterialData(Compound):
             self.material_extra_data = [read_i32(stream) for _ in range(int(self.num_materials))]
         if ctx.version >= pack_version(20, 2, 0, 5):
             self.active_material = read_i32(stream)
-        if ctx.version >= pack_version(10, 2, 0, 0) and ctx.version <= pack_version(10, 2, 0, 0) and (ctx.user_version == 1):
+        if (ctx.version >= pack_version(10, 2, 0, 0)) and (ctx.version <= pack_version(10, 2, 0, 0)) and (ctx.user_version == 1):
             self.cyanide_unknown = read_u8(stream)
-        if ctx.version >= pack_version(10, 3, 0, 1) and ctx.version <= pack_version(10, 4, 0, 1):
+        if (ctx.version >= pack_version(10, 3, 0, 1)) and (ctx.version <= pack_version(10, 4, 0, 1)):
             self.worldshift_unknown = read_i32(stream)
         if ctx.version >= pack_version(20, 2, 0, 7):
             self.material_needs_update = read_bool(stream)
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
-        if ctx.version >= pack_version(10, 0, 1, 0) and ctx.version <= pack_version(20, 1, 0, 3):
+        if (ctx.version >= pack_version(10, 0, 1, 0)) and (ctx.version <= pack_version(20, 1, 0, 3)):
             write_bool(stream, self.has_shader)
-        if ctx.version >= pack_version(10, 0, 1, 0) and ctx.version <= pack_version(20, 1, 0, 3) and (self.has_shader):
+        if (ctx.version >= pack_version(10, 0, 1, 0)) and (ctx.version <= pack_version(20, 1, 0, 3)) and (self.has_shader):
             self.shader_name.write(stream, ctx)
-        if ctx.version >= pack_version(10, 0, 1, 0) and ctx.version <= pack_version(20, 1, 0, 3) and (self.has_shader):
+        if (ctx.version >= pack_version(10, 0, 1, 0)) and (ctx.version <= pack_version(20, 1, 0, 3)) and (self.has_shader):
             write_i32(stream, self.shader_extra_data)
         if ctx.version >= pack_version(20, 2, 0, 5):
             write_u32(stream, self.num_materials)
@@ -1446,9 +1476,9 @@ class MaterialData(Compound):
                 write_i32(stream, __v)
         if ctx.version >= pack_version(20, 2, 0, 5):
             write_i32(stream, self.active_material)
-        if ctx.version >= pack_version(10, 2, 0, 0) and ctx.version <= pack_version(10, 2, 0, 0) and (ctx.user_version == 1):
+        if (ctx.version >= pack_version(10, 2, 0, 0)) and (ctx.version <= pack_version(10, 2, 0, 0)) and (ctx.user_version == 1):
             write_u8(stream, self.cyanide_unknown)
-        if ctx.version >= pack_version(10, 3, 0, 1) and ctx.version <= pack_version(10, 4, 0, 1):
+        if (ctx.version >= pack_version(10, 3, 0, 1)) and (ctx.version <= pack_version(10, 4, 0, 1)):
             write_i32(stream, self.worldshift_unknown)
         if ctx.version >= pack_version(20, 2, 0, 7):
             write_bool(stream, self.material_needs_update)
@@ -1523,23 +1553,23 @@ class Matrix33(Compound):
 class NiBound(Compound):
     """A sphere."""
 
-    center: "Vector3 | None" = None
+    center: Vector3 | None = None
     radius: float = 0.0
-    div2_aabb: "NiBoundAABB | None" = None
+    div2_aabb: NiBoundAABB | None = None
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> NiBound:
         self = cls()
         self.center = Vector3.read(stream, ctx)
         self.radius = read_f32(stream)
-        if ctx.version >= pack_version(20, 3, 0, 9) and ctx.version <= pack_version(20, 3, 0, 9) and (((ctx.user_version == 0x20000) or (ctx.user_version == 0x30000))):
+        if (ctx.version >= pack_version(20, 3, 0, 9)) and (ctx.version <= pack_version(20, 3, 0, 9)) and (((ctx.user_version == 0x20000) or (ctx.user_version == 0x30000))):
             self.div2_aabb = NiBoundAABB.read(stream, ctx)
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
         self.center.write(stream, ctx)
         write_f32(stream, self.radius)
-        if ctx.version >= pack_version(20, 3, 0, 9) and ctx.version <= pack_version(20, 3, 0, 9) and (((ctx.user_version == 0x20000) or (ctx.user_version == 0x30000))):
+        if (ctx.version >= pack_version(20, 3, 0, 9)) and (ctx.version <= pack_version(20, 3, 0, 9)) and (((ctx.user_version == 0x20000) or (ctx.user_version == 0x30000))):
             self.div2_aabb.write(stream, ctx)
 
 
@@ -1548,13 +1578,13 @@ class NiBoundAABB(Compound):
     """Divinity 2 specific NiBound extension."""
 
     num_corners: int = 0
-    corners: list["Vector3 | None"] = field(default_factory=list)
+    corners: list[Vector3 | None] = field(default_factory=list)
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> NiBoundAABB:
         self = cls()
         self.num_corners = read_u16(stream)
-        self.corners = [Vector3.read(stream, ctx) for _ in range(int(2))]
+        self.corners = [Vector3.read(stream, ctx) for _ in range(2)]
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
@@ -1567,7 +1597,7 @@ class NiBoundAABB(Compound):
 class NiPlane(Compound):
     """A plane."""
 
-    normal: "Vector3 | None" = None
+    normal: Vector3 | None = None
     constant: float = 0.0
 
     @classmethod
@@ -1584,8 +1614,8 @@ class NiPlane(Compound):
 
 @dataclass(slots=True)
 class NiQuatTransform(Compound):
-    translation: "Vector3 | None" = None
-    rotation: "Quaternion | None" = None
+    translation: Vector3 | None = None
+    rotation: Quaternion | None = None
     scale: float = 0.0
     trs_valid: list[bool] = field(default_factory=list)
 
@@ -1596,7 +1626,7 @@ class NiQuatTransform(Compound):
         self.rotation = Quaternion.read(stream, ctx)
         self.scale = read_f32(stream)
         if ctx.version <= pack_version(10, 1, 0, 109):
-            self.trs_valid = [read_bool(stream) for _ in range(int(3))]
+            self.trs_valid = [read_bool(stream) for _ in range(3)]
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
@@ -1610,8 +1640,8 @@ class NiQuatTransform(Compound):
 
 @dataclass(slots=True)
 class NiTransform(Compound):
-    rotation: "Matrix33 | None" = None
-    translation: "Vector3 | None" = None
+    rotation: Matrix33 | None = None
+    translation: Vector3 | None = None
     scale: float = 0.0
 
     @classmethod
@@ -1645,8 +1675,8 @@ class PixelFormatComponent(Compound):
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
-        write_u32(stream, int(self.type))
-        write_u32(stream, int(self.convention))
+        write_u32(stream, self.type)
+        write_u32(stream, self.convention)
         write_u8(stream, self.bits_per_channel)
         write_bool(stream, self.is_signed)
 
@@ -1658,31 +1688,31 @@ class QuatKey(Compound):
     time: float = 0.0
     time: float = 0.0
     value: Any = None
-    tbc: "TBC | None" = None
+    tbc: TBC | None = None
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> QuatKey:
         self = cls()
         if ctx.version <= pack_version(10, 1, 0, 0):
             self.time = read_f32(stream)
-        if ctx.version >= pack_version(10, 1, 0, 106) and (ctx.arg != 4):
+        if (ctx.version >= pack_version(10, 1, 0, 106)) and (ctx.arg != 4):
             self.time = read_f32(stream)
-        if (ctx.arg != 4):
+        if ctx.arg != 4:
             # CODEGEN-TODO: unknown type '#T#' for field 'Value'
             pass
-        if (ctx.arg == 3):
+        if ctx.arg == 3:
             self.tbc = TBC.read(stream, ctx)
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
         if ctx.version <= pack_version(10, 1, 0, 0):
             write_f32(stream, self.time)
-        if ctx.version >= pack_version(10, 1, 0, 106) and (ctx.arg != 4):
+        if (ctx.version >= pack_version(10, 1, 0, 106)) and (ctx.arg != 4):
             write_f32(stream, self.time)
-        if (ctx.arg != 4):
+        if ctx.arg != 4:
             # CODEGEN-TODO: unknown type write '#T#'
             pass
-        if (ctx.arg == 3):
+        if ctx.arg == 3:
             self.tbc.write(stream, ctx)
 
 
@@ -1716,24 +1746,24 @@ class ShaderTexDesc(Compound):
     """NiTexturingProperty::ShaderMap. Shader texture description."""
 
     has_map: bool = False
-    map: "TexDesc | None" = None
+    map: TexDesc | None = None
     map_id: int = 0
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> ShaderTexDesc:
         self = cls()
         self.has_map = read_bool(stream)
-        if (self.has_map):
+        if self.has_map:
             self.map = TexDesc.read(stream, ctx)
-        if (self.has_map):
+        if self.has_map:
             self.map_id = read_u32(stream)
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
         write_bool(stream, self.has_map)
-        if (self.has_map):
+        if self.has_map:
             self.map.write(stream, ctx)
-        if (self.has_map):
+        if self.has_map:
             write_u32(stream, self.map_id)
 
 
@@ -1791,20 +1821,20 @@ class SkinPartition(Compound):
     vertex_map: npt.NDArray[Any] = field(default_factory=lambda: np.empty(0))
     vertex_map: npt.NDArray[Any] = field(default_factory=lambda: np.empty(0))
     has_vertex_weights: bool = False
-    vertex_weights: npt.NDArray[Any] = field(default_factory=lambda: np.empty(0))
-    vertex_weights: npt.NDArray[Any] = field(default_factory=lambda: np.empty(0))
+    vertex_weights: list[Any] = field(default_factory=list)
+    vertex_weights: list[Any] = field(default_factory=list)
     strip_lengths: npt.NDArray[Any] = field(default_factory=lambda: np.empty(0))
     has_faces: bool = False
-    strips: npt.NDArray[Any] = field(default_factory=lambda: np.empty(0))
-    strips: npt.NDArray[Any] = field(default_factory=lambda: np.empty(0))
-    triangles: list["Triangle | None"] = field(default_factory=list)
-    triangles: list["Triangle | None"] = field(default_factory=list)
+    strips: list[Any] = field(default_factory=list)
+    strips: list[Any] = field(default_factory=list)
+    triangles: list[Triangle | None] = field(default_factory=list)
+    triangles: list[Triangle | None] = field(default_factory=list)
     has_bone_indices: bool = False
-    bone_indices: list[int] = field(default_factory=list)
+    bone_indices: list[Any] = field(default_factory=list)
     lod_level: int = 0
     global_vb: bool = False
-    vertex_desc: "BSVertexDesc | None" = field(default_factory=BSVertexDesc)
-    triangles_copy: list["Triangle | None"] = field(default_factory=list)
+    vertex_desc: BSVertexDesc | None = field(default_factory=BSVertexDesc)
+    triangles_copy: list[Triangle | None] = field(default_factory=list)
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> SkinPartition:
@@ -1819,35 +1849,35 @@ class SkinPartition(Compound):
             self.has_vertex_map = read_bool(stream)
         if ctx.version <= pack_version(10, 0, 1, 2):
             self.vertex_map = read_array_u16(stream, int(self.num_vertices))
-        if ctx.version >= pack_version(10, 1, 0, 0) and (self.has_vertex_map):
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and (self.has_vertex_map):
             self.vertex_map = read_array_u16(stream, int(self.num_vertices))
         if ctx.version >= pack_version(10, 1, 0, 0):
             self.has_vertex_weights = read_bool(stream)
         if ctx.version <= pack_version(10, 0, 1, 2):
-            self.vertex_weights = read_array_f32(stream, int(self.num_vertices))
-        if ctx.version >= pack_version(10, 1, 0, 0) and (self.has_vertex_weights):
-            self.vertex_weights = read_array_f32(stream, int(self.num_vertices))
+            self.vertex_weights = [read_array_f32(stream, int(self.num_weights_per_vertex)) for _ in range(int(self.num_vertices))]
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and (self.has_vertex_weights):
+            self.vertex_weights = [read_array_f32(stream, int(self.num_weights_per_vertex)) for _ in range(int(self.num_vertices))]
         self.strip_lengths = read_array_u16(stream, int(self.num_strips))
         if ctx.version >= pack_version(10, 1, 0, 0):
             self.has_faces = read_bool(stream)
-        if ctx.version <= pack_version(10, 0, 1, 2) and (self.num_strips != 0):
-            self.strips = read_array_u16(stream, int(self.num_strips))
-        if ctx.version >= pack_version(10, 1, 0, 0) and ((self.has_faces) and (self.num_strips != 0)):
-            self.strips = read_array_u16(stream, int(self.num_strips))
-        if ctx.version <= pack_version(10, 0, 1, 2) and (self.num_strips == 0):
+        if (ctx.version <= pack_version(10, 0, 1, 2)) and (self.num_strips != 0):
+            self.strips = [read_array_u16(stream, int(self.strip_lengths[__i])) for __i in range(int(self.num_strips))]
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and ((self.has_faces) and (self.num_strips != 0)):
+            self.strips = [read_array_u16(stream, int(self.strip_lengths[__i])) for __i in range(int(self.num_strips))]
+        if (ctx.version <= pack_version(10, 0, 1, 2)) and (self.num_strips == 0):
             self.triangles = [Triangle.read(stream, ctx) for _ in range(int(self.num_triangles))]
-        if ctx.version >= pack_version(10, 1, 0, 0) and ((self.has_faces) and (self.num_strips == 0)):
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and ((self.has_faces) and (self.num_strips == 0)):
             self.triangles = [Triangle.read(stream, ctx) for _ in range(int(self.num_triangles))]
         self.has_bone_indices = read_bool(stream)
-        if (self.has_bone_indices):
-            self.bone_indices = [read_u8(stream) for _ in range(int(self.num_vertices))]
-        if ctx.version >= pack_version(20, 2, 0, 7) and ctx.version <= pack_version(20, 2, 0, 7) and ((ctx.bs_version > 34)):
+        if self.has_bone_indices:
+            self.bone_indices = [[read_u8(stream) for _ in range(int(self.num_weights_per_vertex))] for _ in range(int(self.num_vertices))]
+        if (ctx.version >= pack_version(20, 2, 0, 7)) and (ctx.version <= pack_version(20, 2, 0, 7)) and ((ctx.bs_version > 34)):
             self.lod_level = read_u8(stream)
-        if ctx.version >= pack_version(20, 2, 0, 7) and ctx.version <= pack_version(20, 2, 0, 7) and ((ctx.bs_version > 34)):
+        if (ctx.version >= pack_version(20, 2, 0, 7)) and (ctx.version <= pack_version(20, 2, 0, 7)) and ((ctx.bs_version > 34)):
             self.global_vb = read_bool(stream)
-        if ctx.version >= pack_version(20, 2, 0, 7) and ctx.version <= pack_version(20, 2, 0, 7) and ((ctx.bs_version == 100)):
+        if (ctx.version >= pack_version(20, 2, 0, 7)) and (ctx.version <= pack_version(20, 2, 0, 7)) and ((ctx.bs_version == 100)):
             self.vertex_desc = BSVertexDesc.read(stream, ctx)
-        if ctx.version >= pack_version(20, 2, 0, 7) and ctx.version <= pack_version(20, 2, 0, 7) and ((ctx.bs_version == 100)):
+        if (ctx.version >= pack_version(20, 2, 0, 7)) and (ctx.version <= pack_version(20, 2, 0, 7)) and ((ctx.bs_version == 100)):
             self.triangles_copy = [Triangle.read(stream, ctx) for _ in range(int(self.num_triangles))]
         return self
 
@@ -1862,38 +1892,43 @@ class SkinPartition(Compound):
             write_bool(stream, self.has_vertex_map)
         if ctx.version <= pack_version(10, 0, 1, 2):
             write_array_u16(stream, self.vertex_map)
-        if ctx.version >= pack_version(10, 1, 0, 0) and (self.has_vertex_map):
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and (self.has_vertex_map):
             write_array_u16(stream, self.vertex_map)
         if ctx.version >= pack_version(10, 1, 0, 0):
             write_bool(stream, self.has_vertex_weights)
         if ctx.version <= pack_version(10, 0, 1, 2):
-            write_array_f32(stream, self.vertex_weights)
-        if ctx.version >= pack_version(10, 1, 0, 0) and (self.has_vertex_weights):
-            write_array_f32(stream, self.vertex_weights)
+            for __row in self.vertex_weights:
+                write_array_f32(stream, __row)
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and (self.has_vertex_weights):
+            for __row in self.vertex_weights:
+                write_array_f32(stream, __row)
         write_array_u16(stream, self.strip_lengths)
         if ctx.version >= pack_version(10, 1, 0, 0):
             write_bool(stream, self.has_faces)
-        if ctx.version <= pack_version(10, 0, 1, 2) and (self.num_strips != 0):
-            write_array_u16(stream, self.strips)
-        if ctx.version >= pack_version(10, 1, 0, 0) and ((self.has_faces) and (self.num_strips != 0)):
-            write_array_u16(stream, self.strips)
-        if ctx.version <= pack_version(10, 0, 1, 2) and (self.num_strips == 0):
+        if (ctx.version <= pack_version(10, 0, 1, 2)) and (self.num_strips != 0):
+            for __row in self.strips:
+                write_array_u16(stream, __row)
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and ((self.has_faces) and (self.num_strips != 0)):
+            for __row in self.strips:
+                write_array_u16(stream, __row)
+        if (ctx.version <= pack_version(10, 0, 1, 2)) and (self.num_strips == 0):
             for __v in self.triangles:
                 __v.write(stream, ctx)
-        if ctx.version >= pack_version(10, 1, 0, 0) and ((self.has_faces) and (self.num_strips == 0)):
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and ((self.has_faces) and (self.num_strips == 0)):
             for __v in self.triangles:
                 __v.write(stream, ctx)
         write_bool(stream, self.has_bone_indices)
-        if (self.has_bone_indices):
-            for __v in self.bone_indices:
-                write_u8(stream, __v)
-        if ctx.version >= pack_version(20, 2, 0, 7) and ctx.version <= pack_version(20, 2, 0, 7) and ((ctx.bs_version > 34)):
+        if self.has_bone_indices:
+            for __row in self.bone_indices:
+                for __v in __row:
+                    write_u8(stream, __v)
+        if (ctx.version >= pack_version(20, 2, 0, 7)) and (ctx.version <= pack_version(20, 2, 0, 7)) and ((ctx.bs_version > 34)):
             write_u8(stream, self.lod_level)
-        if ctx.version >= pack_version(20, 2, 0, 7) and ctx.version <= pack_version(20, 2, 0, 7) and ((ctx.bs_version > 34)):
+        if (ctx.version >= pack_version(20, 2, 0, 7)) and (ctx.version <= pack_version(20, 2, 0, 7)) and ((ctx.bs_version > 34)):
             write_bool(stream, self.global_vb)
-        if ctx.version >= pack_version(20, 2, 0, 7) and ctx.version <= pack_version(20, 2, 0, 7) and ((ctx.bs_version == 100)):
+        if (ctx.version >= pack_version(20, 2, 0, 7)) and (ctx.version <= pack_version(20, 2, 0, 7)) and ((ctx.bs_version == 100)):
             self.vertex_desc.write(stream, ctx)
-        if ctx.version >= pack_version(20, 2, 0, 7) and ctx.version <= pack_version(20, 2, 0, 7) and ((ctx.bs_version == 100)):
+        if (ctx.version >= pack_version(20, 2, 0, 7)) and (ctx.version <= pack_version(20, 2, 0, 7)) and ((ctx.bs_version == 100)):
             for __v in self.triangles_copy:
                 __v.write(stream, ctx)
 
@@ -1902,7 +1937,7 @@ class SkinPartition(Compound):
 class StringPalette(Compound):
     """A list of \\0 terminated strings."""
 
-    palette: "SizedString | None" = None
+    palette: SizedString | None = None
     length: int = 0
 
     @classmethod
@@ -1966,18 +2001,18 @@ class TexDesc(Compound):
     source: int = 0
     clamp_mode: int = 0
     filter_mode: int = 0
-    flags: "TexturingMapFlags | None" = field(default_factory=TexturingMapFlags)
+    flags: TexturingMapFlags | None = field(default_factory=TexturingMapFlags)
     max_anisotropy: int = 0
     uv_set: int = 0
     ps2_l: int = 0
     ps2_k: int = 0
     unknown_short_1: int = 0
     has_texture_transform: bool = False
-    translation: "TexCoord | None" = None
-    scale: "TexCoord | None" = None
+    translation: TexCoord | None = None
+    scale: TexCoord | None = None
     rotation: float = 0.0
     transform_method: int = 0
-    center: "TexCoord | None" = None
+    center: TexCoord | None = None
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> TexDesc:
@@ -2004,15 +2039,15 @@ class TexDesc(Compound):
             self.unknown_short_1 = read_u16(stream)
         if ctx.version >= pack_version(10, 1, 0, 0):
             self.has_texture_transform = read_bool(stream)
-        if ctx.version >= pack_version(10, 1, 0, 0) and (self.has_texture_transform):
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and (self.has_texture_transform):
             self.translation = TexCoord.read(stream, ctx)
-        if ctx.version >= pack_version(10, 1, 0, 0) and (self.has_texture_transform):
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and (self.has_texture_transform):
             self.scale = TexCoord.read(stream, ctx)
-        if ctx.version >= pack_version(10, 1, 0, 0) and (self.has_texture_transform):
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and (self.has_texture_transform):
             self.rotation = read_f32(stream)
-        if ctx.version >= pack_version(10, 1, 0, 0) and (self.has_texture_transform):
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and (self.has_texture_transform):
             self.transform_method = read_u32(stream)
-        if ctx.version >= pack_version(10, 1, 0, 0) and (self.has_texture_transform):
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and (self.has_texture_transform):
             self.center = TexCoord.read(stream, ctx)
         return self
 
@@ -2022,9 +2057,9 @@ class TexDesc(Compound):
         if ctx.version >= pack_version(3, 3, 0, 13):
             write_i32(stream, self.source)
         if ctx.version <= pack_version(20, 0, 0, 5):
-            write_u32(stream, int(self.clamp_mode))
+            write_u32(stream, self.clamp_mode)
         if ctx.version <= pack_version(20, 0, 0, 5):
-            write_u32(stream, int(self.filter_mode))
+            write_u32(stream, self.filter_mode)
         if ctx.version >= pack_version(20, 1, 0, 3):
             self.flags.write(stream, ctx)
         if ctx.version >= pack_version(20, 5, 0, 4):
@@ -2039,15 +2074,15 @@ class TexDesc(Compound):
             write_u16(stream, self.unknown_short_1)
         if ctx.version >= pack_version(10, 1, 0, 0):
             write_bool(stream, self.has_texture_transform)
-        if ctx.version >= pack_version(10, 1, 0, 0) and (self.has_texture_transform):
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and (self.has_texture_transform):
             self.translation.write(stream, ctx)
-        if ctx.version >= pack_version(10, 1, 0, 0) and (self.has_texture_transform):
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and (self.has_texture_transform):
             self.scale.write(stream, ctx)
-        if ctx.version >= pack_version(10, 1, 0, 0) and (self.has_texture_transform):
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and (self.has_texture_transform):
             write_f32(stream, self.rotation)
-        if ctx.version >= pack_version(10, 1, 0, 0) and (self.has_texture_transform):
-            write_u32(stream, int(self.transform_method))
-        if ctx.version >= pack_version(10, 1, 0, 0) and (self.has_texture_transform):
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and (self.has_texture_transform):
+            write_u32(stream, self.transform_method)
+        if (ctx.version >= pack_version(10, 1, 0, 0)) and (self.has_texture_transform):
             self.center.write(stream, ctx)
 
 
@@ -2076,7 +2111,7 @@ class Triangle(Compound):
 @dataclass(slots=True)
 class UnionBV(Compound):
     num_bv: int = 0
-    bounding_volumes: list["BoundingVolume | None"] = field(default_factory=list)
+    bounding_volumes: list[BoundingVolume | None] = field(default_factory=list)
 
     @classmethod
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> UnionBV:
@@ -2142,7 +2177,7 @@ class Vector4(Compound):
 class string(Compound):
     """A string type."""
 
-    string: "SizedString | None" = None
+    string: SizedString | None = None
     index: int = 0
 
     @classmethod

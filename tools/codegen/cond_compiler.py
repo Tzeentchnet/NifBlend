@@ -203,6 +203,9 @@ class ExprCompiler:
     def compile_arg(self, text: str, resolver: FieldResolver) -> str:
         return self._compile(text, "arg", resolver)
 
+    def compile_width(self, text: str, resolver: FieldResolver) -> str:
+        return self._compile(text, "width", resolver)
+
     # ---- core ----
 
     def _compile(self, text: str, attr: str, resolver: FieldResolver) -> str:

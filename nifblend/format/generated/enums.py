@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from enum import IntEnum, IntFlag
 
-__all__ = ['AlphaFormat', 'AlphaFunction', 'AnimNoteType', 'AnimType', 'ApplyMode', 'BSDismemberBodyPartType', 'BSLightingShaderType', 'BSShaderCRC32', 'BSShaderType', 'BSShaderType155', 'BillboardMode', 'BoundVolumeType', 'ConsistencyType', 'CycleType', 'EndianType', 'ImageType', 'KeyType', 'MipMapFormat', 'NiNBTMethod', 'PixelComponent', 'PixelFormat', 'PixelLayout', 'PixelRepresentation', 'PixelTiling', 'ShadeFlags', 'TestFunction', 'TexClampMode', 'TexFilterMode', 'TransformMethod', 'AccumFlags', 'BSPartFlag', 'BSShaderFlags', 'BSShaderFlags2', 'Fallout4ShaderPropertyFlags1', 'Fallout4ShaderPropertyFlags2', 'InterpBlendFlags', 'NiSwitchFlags', 'SkyrimShaderPropertyFlags1', 'SkyrimShaderPropertyFlags2', 'VertexAttribute']
+__all__ = ['AccumFlags', 'AlphaFormat', 'AlphaFunction', 'AnimNoteType', 'AnimType', 'ApplyMode', 'BSDismemberBodyPartType', 'BSLightingShaderType', 'BSPartFlag', 'BSShaderCRC32', 'BSShaderFlags', 'BSShaderFlags2', 'BSShaderType', 'BSShaderType155', 'BillboardMode', 'BoundVolumeType', 'ConsistencyType', 'CycleType', 'EndianType', 'Fallout4ShaderPropertyFlags1', 'Fallout4ShaderPropertyFlags2', 'ImageType', 'InterpBlendFlags', 'KeyType', 'MipMapFormat', 'NiNBTMethod', 'NiSwitchFlags', 'PixelComponent', 'PixelFormat', 'PixelLayout', 'PixelRepresentation', 'PixelTiling', 'ShadeFlags', 'SkyrimShaderPropertyFlags1', 'SkyrimShaderPropertyFlags2', 'TestFunction', 'TexClampMode', 'TexFilterMode', 'TransformMethod', 'VertexAttribute']
 
 
 class AlphaFormat(IntEnum):
