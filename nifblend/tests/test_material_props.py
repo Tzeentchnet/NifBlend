@@ -1,7 +1,7 @@
 """Unit tests for :mod:`nifblend.bridge.material_props` (Phase 3 step 13).
 
 The real PropertyGroup classes are registered against the bpy stub at
-import time (see ``conftest.py``); these tests exercise the duck-typed
+import time (see ``tests/conftest.py``); these tests exercise the duck-typed
 :func:`apply_material_data_to_props` /
 :func:`read_material_data_from_props` helpers and the end-to-end
 round-trip through the material bridge.

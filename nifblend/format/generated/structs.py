@@ -1287,26 +1287,112 @@ class Key(Compound):
     def read(cls, stream: IO[bytes], ctx: ReadContext) -> Key:
         self = cls()
         self.time = read_f32(stream)
-        # CODEGEN-TODO: unknown type '#T#' for field 'Value'
+        if ctx.template == "float":
+            self.value = read_f32(stream)
+        elif ctx.template == "byte":
+            self.value = read_u8(stream)
+        elif ctx.template == "Vector3":
+            self.value = Vector3.read(stream, ctx)
+        elif ctx.template == "Quaternion":
+            self.value = Quaternion.read(stream, ctx)
+        elif ctx.template == "Color4":
+            self.value = Color4.read(stream, ctx)
+        elif ctx.template == "ByteColor4":
+            self.value = ByteColor4.read(stream, ctx)
+        elif ctx.template == "string":
+            self.value = string.read(stream, ctx)
+        else:
+            raise NotImplementedError(f"unsupported template type for #T# field: {ctx.template!r}")
         if ctx.arg == 2:
-            # CODEGEN-TODO: unknown type '#T#' for field 'Forward'
-            pass
+            if ctx.template == "float":
+                self.forward = read_f32(stream)
+            elif ctx.template == "byte":
+                self.forward = read_u8(stream)
+            elif ctx.template == "Vector3":
+                self.forward = Vector3.read(stream, ctx)
+            elif ctx.template == "Quaternion":
+                self.forward = Quaternion.read(stream, ctx)
+            elif ctx.template == "Color4":
+                self.forward = Color4.read(stream, ctx)
+            elif ctx.template == "ByteColor4":
+                self.forward = ByteColor4.read(stream, ctx)
+            elif ctx.template == "string":
+                self.forward = string.read(stream, ctx)
+            else:
+                raise NotImplementedError(f"unsupported template type for #T# field: {ctx.template!r}")
         if ctx.arg == 2:
-            # CODEGEN-TODO: unknown type '#T#' for field 'Backward'
-            pass
+            if ctx.template == "float":
+                self.backward = read_f32(stream)
+            elif ctx.template == "byte":
+                self.backward = read_u8(stream)
+            elif ctx.template == "Vector3":
+                self.backward = Vector3.read(stream, ctx)
+            elif ctx.template == "Quaternion":
+                self.backward = Quaternion.read(stream, ctx)
+            elif ctx.template == "Color4":
+                self.backward = Color4.read(stream, ctx)
+            elif ctx.template == "ByteColor4":
+                self.backward = ByteColor4.read(stream, ctx)
+            elif ctx.template == "string":
+                self.backward = string.read(stream, ctx)
+            else:
+                raise NotImplementedError(f"unsupported template type for #T# field: {ctx.template!r}")
         if ctx.arg == 3:
             self.tbc = TBC.read(stream, ctx)
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
         write_f32(stream, self.time)
-        # CODEGEN-TODO: unknown type write '#T#'
+        if ctx.template == "float":
+            write_f32(stream, self.value)
+        elif ctx.template == "byte":
+            write_u8(stream, self.value)
+        elif ctx.template == "Vector3":
+            self.value.write(stream, ctx)
+        elif ctx.template == "Quaternion":
+            self.value.write(stream, ctx)
+        elif ctx.template == "Color4":
+            self.value.write(stream, ctx)
+        elif ctx.template == "ByteColor4":
+            self.value.write(stream, ctx)
+        elif ctx.template == "string":
+            self.value.write(stream, ctx)
+        else:
+            raise NotImplementedError(f"unsupported template type for #T# field: {ctx.template!r}")
         if ctx.arg == 2:
-            # CODEGEN-TODO: unknown type write '#T#'
-            pass
+            if ctx.template == "float":
+                write_f32(stream, self.forward)
+            elif ctx.template == "byte":
+                write_u8(stream, self.forward)
+            elif ctx.template == "Vector3":
+                self.forward.write(stream, ctx)
+            elif ctx.template == "Quaternion":
+                self.forward.write(stream, ctx)
+            elif ctx.template == "Color4":
+                self.forward.write(stream, ctx)
+            elif ctx.template == "ByteColor4":
+                self.forward.write(stream, ctx)
+            elif ctx.template == "string":
+                self.forward.write(stream, ctx)
+            else:
+                raise NotImplementedError(f"unsupported template type for #T# field: {ctx.template!r}")
         if ctx.arg == 2:
-            # CODEGEN-TODO: unknown type write '#T#'
-            pass
+            if ctx.template == "float":
+                write_f32(stream, self.backward)
+            elif ctx.template == "byte":
+                write_u8(stream, self.backward)
+            elif ctx.template == "Vector3":
+                self.backward.write(stream, ctx)
+            elif ctx.template == "Quaternion":
+                self.backward.write(stream, ctx)
+            elif ctx.template == "Color4":
+                self.backward.write(stream, ctx)
+            elif ctx.template == "ByteColor4":
+                self.backward.write(stream, ctx)
+            elif ctx.template == "string":
+                self.backward.write(stream, ctx)
+            else:
+                raise NotImplementedError(f"unsupported template type for #T# field: {ctx.template!r}")
         if ctx.arg == 3:
             self.tbc.write(stream, ctx)
 
@@ -1698,8 +1784,22 @@ class QuatKey(Compound):
         if (ctx.version >= pack_version(10, 1, 0, 106)) and (ctx.arg != 4):
             self.time = read_f32(stream)
         if ctx.arg != 4:
-            # CODEGEN-TODO: unknown type '#T#' for field 'Value'
-            pass
+            if ctx.template == "float":
+                self.value = read_f32(stream)
+            elif ctx.template == "byte":
+                self.value = read_u8(stream)
+            elif ctx.template == "Vector3":
+                self.value = Vector3.read(stream, ctx)
+            elif ctx.template == "Quaternion":
+                self.value = Quaternion.read(stream, ctx)
+            elif ctx.template == "Color4":
+                self.value = Color4.read(stream, ctx)
+            elif ctx.template == "ByteColor4":
+                self.value = ByteColor4.read(stream, ctx)
+            elif ctx.template == "string":
+                self.value = string.read(stream, ctx)
+            else:
+                raise NotImplementedError(f"unsupported template type for #T# field: {ctx.template!r}")
         if ctx.arg == 3:
             self.tbc = TBC.read(stream, ctx)
         return self
@@ -1710,8 +1810,22 @@ class QuatKey(Compound):
         if (ctx.version >= pack_version(10, 1, 0, 106)) and (ctx.arg != 4):
             write_f32(stream, self.time)
         if ctx.arg != 4:
-            # CODEGEN-TODO: unknown type write '#T#'
-            pass
+            if ctx.template == "float":
+                write_f32(stream, self.value)
+            elif ctx.template == "byte":
+                write_u8(stream, self.value)
+            elif ctx.template == "Vector3":
+                self.value.write(stream, ctx)
+            elif ctx.template == "Quaternion":
+                self.value.write(stream, ctx)
+            elif ctx.template == "Color4":
+                self.value.write(stream, ctx)
+            elif ctx.template == "ByteColor4":
+                self.value.write(stream, ctx)
+            elif ctx.template == "string":
+                self.value.write(stream, ctx)
+            else:
+                raise NotImplementedError(f"unsupported template type for #T# field: {ctx.template!r}")
         if ctx.arg == 3:
             self.tbc.write(stream, ctx)
 

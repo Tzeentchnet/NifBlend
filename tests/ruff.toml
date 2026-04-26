@@ -26,7 +26,7 @@ ignore = [
 # Generated schema layer: emitter is best-effort. Ignore schema-driven naming
 # (lowercase `string` basic type) and rare precedence-clarity warnings in
 # vercond expressions that the cond-compiler emits literally from nif.xml.
-"nifblend/format/generated/**" = ["N801", "RUF021"]
+"nifblend/format/generated/**" = ["F401", "I001", "N801", "RUF021", "RUF022", "SIM114", "UP034"]
 # Generated package re-exports submodule contents intentionally.
 "nifblend/format/generated/__init__.py" = ["F403"]
 # Blender requires `ADDONNAME_OT_name` operator class naming and uses bpy.props

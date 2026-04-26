@@ -2,13 +2,13 @@
 
 ## Status
 
-**Empty by design.** NifBlend does **not** vendor a pre-built `nifgen` at runtime. After Phase 1.2 was attempted and hit the blockers documented below, the project pivoted to an in-house codegen pipeline that emits its own schema layer directly from a pinned `nif.xml`. See [`tools/codegen/`](../../../tools/codegen/) and [`nifblend/format/generated/`](../../format/generated/).
+**Empty by design.** NifBlend does **not** vendor a pre-built `nifgen` at runtime. After Phase 1.2 was attempted and hit the blockers documented below, the project pivoted to an in-house codegen pipeline that emits its own schema layer directly from a pinned `nif.xml`. See [`tools/codegen/`](../../tools/codegen/) and [`nifblend/format/generated/`](../../nifblend/format/generated/).
 
 This directory is kept as an empty Python package so any historical / external references to `nifblend.vendor.nifgen.*` stay importable, and as an anchor for the notes below.
 
 ## What this means for contributors
 
-- **Do not add a runtime dependency on a vendored nifgen here.** Schema-derived code lives under [`nifblend/format/generated/`](../../format/generated/) and is regenerated via `python -m tools.codegen` (CI-gated by `--check`).
+- **Do not add a runtime dependency on a vendored nifgen here.** Schema-derived code lives under [`nifblend/format/generated/`](../../nifblend/format/generated/) and is regenerated via `python -m tools.codegen` (CI-gated by `--check`).
 - **You may consult external nifgen implementations as a design reference**, in particular:
   - [`blender_niftools_addon`](https://github.com/niftools/blender_niftools_addon) bundles a working built `nifgen/` under `dependencies/` — useful for cross-checking field order, version branches, and read/write semantics for tricky niobjects.
   - [`OpenNaja/cobra-tools`](https://github.com/OpenNaja/cobra-tools) `codegen/` — useful for cross-checking how the schema cond DSL is interpreted.
@@ -46,7 +46,7 @@ The reference `blender_niftools_addon` ships nifgen as a separate dependency bui
 
 It was the lowest-friction unblock at the time and is still a valid escape hatch. We chose the in-house emitter instead because:
 
-- The closure-walked whitelist ([`tools/codegen/whitelist.py`](../../../tools/codegen/whitelist.py)) keeps the generated surface area small and reviewable (~138 types, not the full ~860).
+- The closure-walked whitelist ([`tools/codegen/whitelist.py`](../../tools/codegen/whitelist.py)) keeps the generated surface area small and reviewable (~138 types, not the full ~860).
 - The full pipeline (`nif.xml` → AST → cond compiler → emit) is auditable in this repo, with a CI `--check` gate against drift.
 - We avoid taking a runtime dependency on the upstream generator's bugs and release cadence.
 
@@ -54,4 +54,4 @@ If the in-house path ever proves untenable for a niobject family, falling back t
 
 ## License
 
-`nif.xml` is **GPL-3.0**, so any code derived from it (in-house or vendored) inherits GPL-3.0. NifBlend's repo `LICENSE` is GPL-3.0-or-later to match.
+`nif.xml` is **GPL-3.0**, so any code derived from it (in-house or vendored) inherits GPL-3.0. NifBlend's repo [`LICENSE`](../../LICENSE) is GPL-3.0-or-later to match.

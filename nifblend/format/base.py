@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import IO, Any
 
-__all__ = ["ReadContext", "Block", "Compound"]
+__all__ = ["Block", "Compound", "ReadContext"]
 
 
 @dataclass(slots=True)
@@ -30,12 +30,19 @@ class ReadContext:
     `args` is a stack: the codegen pushes the value of an `arg=` expression
     before calling a nested `read` and pops on return. Nested code reads the
     top of stack as `ctx.arg`.
+
+    `templates` is a parallel stack used by templated compounds (`Key`,
+    `KeyGroup`, `QuatKey` — `<struct generic="true">` in the schema). When a
+    field declares `template="Vector3"` the codegen pushes ``"Vector3"``
+    around the nested read; the inner ``#T#``-typed fields then dispatch
+    on ``ctx.template`` to pick the right primitive / Compound reader.
     """
 
     version: int = 0
     user_version: int = 0
     bs_version: int = 0
     args: list[Any] = field(default_factory=list)
+    templates: list[str] = field(default_factory=list)
 
     @property
     def arg(self) -> Any:
@@ -46,6 +53,16 @@ class ReadContext:
 
     def pop_arg(self) -> None:
         self.args.pop()
+
+    @property
+    def template(self) -> str:
+        return self.templates[-1] if self.templates else ""
+
+    def push_template(self, value: str) -> None:
+        self.templates.append(value)
+
+    def pop_template(self) -> None:
+        self.templates.pop()
 
 
 class Compound:

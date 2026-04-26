@@ -25,9 +25,9 @@ After extraction the layout is:
 ```
 
 Configure `<assets-root>` as the `Starfield Data` root in NifBlend's
-preferences. The Phase 9c [`ExternalAssetResolver`](../../bridge/external_assets.py)
+preferences. The Phase 9c [`ExternalAssetResolver`](../../nifblend/bridge/external_assets.py)
 walks paths under that root using the same case-insensitive +
-fuzzy-fallback strategy as Phase 8i [`resolve_texture_path`](../bridge/textures.py).
+fuzzy-fallback strategy as Phase 8i [`resolve_texture_path`](../../nifblend/bridge/textures.py).
 
 ## `.mesh` v1 binary layout (little-endian)
 
@@ -77,7 +77,7 @@ f32  distance      // distance threshold (engine-side; informational)
 ## `.mat` JSON layout
 
 Starfield materials are a small JSON manifest. Keys observed in vanilla
-assets and consumed by the v1.1 [`starfield_material`](../../bridge/games/starfield_material.py)
+assets and consumed by the v1.1 [`starfield_material`](../../nifblend/bridge/games/starfield_material.py)
 reader:
 
 ```jsonc

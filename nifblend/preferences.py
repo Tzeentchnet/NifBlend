@@ -99,6 +99,7 @@ class NIFBLEND_AddonPreferences(bpy.types.AddonPreferences):
     skyrim_se_data: _data_root_prop("Skyrim SE Data", "Skyrim Special Edition")  # type: ignore[valid-type]
     fo4_data: _data_root_prop("Fallout 4 Data", "Fallout 4")  # type: ignore[valid-type]
     fo76_data: _data_root_prop("Fallout 76 Data", "Fallout 76")  # type: ignore[valid-type]
+    starfield_data: _data_root_prop("Starfield Data", "Starfield")  # type: ignore[valid-type]
 
     default_profile: EnumProperty(  # type: ignore[valid-type]
         name="Default Game Profile",
@@ -182,6 +183,7 @@ class NIFBLEND_AddonPreferences(bpy.types.AddonPreferences):
             "skyrim_se_data",
             "fo4_data",
             "fo76_data",
+            "starfield_data",
         ):
             box.prop(self, prop)
 
@@ -201,6 +203,7 @@ _DATA_ROOT_BY_PROFILE: dict[GameProfile, str] = {
     GameProfile.SKYRIM_SE: "skyrim_se_data",
     GameProfile.FALLOUT_4: "fo4_data",
     GameProfile.FALLOUT_76: "fo76_data",
+    GameProfile.STARFIELD: "starfield_data",
 }
 
 

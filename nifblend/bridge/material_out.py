@@ -91,7 +91,7 @@ def material_data_from_blender(mat: Any) -> MaterialData:
     if not getattr(mat, "use_nodes", False):
         data.alpha_blend = _is_blend(getattr(mat, "blend_method", "OPAQUE"))
         data.alpha_test = _is_clip(getattr(mat, "blend_method", "OPAQUE"))
-        data.alpha_threshold = int(round(_alpha_threshold(mat) * 255.0))
+        data.alpha_threshold = round(_alpha_threshold(mat) * 255.0)
         return data
 
     tree = getattr(mat, "node_tree", None)
@@ -102,7 +102,7 @@ def material_data_from_blender(mat: Any) -> MaterialData:
     # Alpha state from the material itself (mirrors what the import side wrote).
     data.alpha_blend = _is_blend(getattr(mat, "blend_method", "OPAQUE"))
     data.alpha_test = _is_clip(getattr(mat, "blend_method", "OPAQUE"))
-    data.alpha_threshold = int(round(_alpha_threshold(mat) * 255.0))
+    data.alpha_threshold = round(_alpha_threshold(mat) * 255.0)
 
     # Layer NIF-only state from the typed PropertyGroup on top, so flags
     # / texture slots Blender can't represent survive the round-trip.
@@ -304,7 +304,7 @@ def export_material(
     :attr:`MaterialData.origin` (which defaults to BSLightingShaderProperty).
 
     The classic Morrowind / Oblivion stack (``NiMaterialProperty`` +
-    ``NiTexturingProperty`` + N × ``NiSourceTexture``) is multi-block and
+    ``NiTexturingProperty`` + N x ``NiSourceTexture``) is multi-block and
     therefore can't fit this single-block convenience signature; callers
     that need it use :func:`build_classic_material_blocks` directly.
     """

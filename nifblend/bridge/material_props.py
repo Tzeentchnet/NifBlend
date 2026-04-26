@@ -45,8 +45,10 @@ __all__ = [
     "NifBlendMaterialProperties",
     "NifBlendMaterialTextureSlot",
     "apply_material_data_to_props",
+    "get_starfield_material_path",
     "read_material_data_from_props",
     "register",
+    "set_starfield_material_path",
     "unregister",
 ]
 
@@ -82,6 +84,11 @@ _FLOAT_FIELDS: tuple[str, ...] = (
 _VEC2_FIELDS: tuple[str, ...] = ("uv_offset", "uv_scale")
 _VEC3_FIELDS: tuple[str, ...] = ("specular_color", "ambient_color", "diffuse_color")
 _STR_FIELDS: tuple[str, ...] = ("origin",)
+#: Phase 9i: Starfield ``.mat`` rel-path stamped at import so a reload
+#: operator can re-resolve the manifest later. Carried separately from
+#: ``_STR_FIELDS`` because it lives outside :class:`MaterialData` -- the
+#: operator writes / reads it directly via the helpers below.
+_STARFIELD_MATERIAL_PATH_ATTR = "starfield_material_path"
 
 
 # ---- PropertyGroup classes -----------------------------------------------
@@ -261,6 +268,17 @@ class NifBlendMaterialProperties(bpy.types.PropertyGroup):
         min=0,
     )
 
+    # Phase 9i — Starfield: rel-path of the ``.mat`` JSON manifest this
+    # material was imported from, so the reload operator can re-resolve
+    # and rebuild the Principled-BSDF graph in place. Empty for any
+    # non-Starfield material.
+    starfield_material_path: bpy.props.StringProperty(  # type: ignore[valid-type]
+        name="Starfield Material Path",
+        description="NIF-relative path to the source Starfield .mat manifest",
+        default="",
+        subtype="FILE_PATH",
+    )
+
 
 _REGISTERED_CLASSES: tuple[type, ...] = (
     NifBlendMaterialTextureSlot,
@@ -337,6 +355,28 @@ def read_material_data_from_props(mat: Any, data: MaterialData) -> None:
 
     for slot, path in _read_textures(props).items():
         data.textures.setdefault(slot, path)
+
+
+def set_starfield_material_path(mat: Any, rel_path: str) -> None:
+    """Stamp the Starfield ``.mat`` rel-path onto ``mat.nifblend``.
+
+    No-op when the PropertyGroup can't be reached (e.g. test fakes that
+    refuse arbitrary attribute writes). Empty / ``None`` clears the
+    existing stamp.
+    """
+    props = _get_or_create_props(mat)
+    if props is None:
+        return
+    _set_attr(props, _STARFIELD_MATERIAL_PATH_ATTR, str(rel_path or ""))
+
+
+def get_starfield_material_path(mat: Any) -> str:
+    """Return the Starfield ``.mat`` rel-path stamp, or ``""`` if unset."""
+    props = _get_props(mat)
+    if props is None:
+        return ""
+    value = _get_attr(props, _STARFIELD_MATERIAL_PATH_ATTR)
+    return str(value) if value else ""
 
 
 # ---- registration --------------------------------------------------------

@@ -11,7 +11,7 @@ catches missed regenerations.
 
 Out of scope (not whitelisted): `bhk*` collision blocks, all `NiPSys*`
 particle-system blocks beyond the bare minimum, `EGM`/`TRI` morph blocks.
-See [`ROADMAP.md`](../../ROADMAP.md) for the canonical scope.
+See [`ROADMAP.md`](../../docs/ROADMAP.md) for the canonical scope.
 """
 
 from __future__ import annotations

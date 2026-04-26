@@ -2,7 +2,7 @@
 packed compounds, and the BSVertexData fast path.
 
 These run in plain CPython with the ``bpy`` stub installed by the repo-root
-``conftest.py``; no Blender required.
+``tests/conftest.py``; no Blender required.
 """
 
 from __future__ import annotations

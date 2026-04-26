@@ -1,6 +1,6 @@
 """Smoke test — verifies the package imports and exposes `register`/`unregister`.
 
-The `bpy` stub is installed by the repo-root `conftest.py` so this runs without
+The `bpy` stub is installed by `tests/conftest.py` so this runs without
 Blender. Real Blender-integration tests are marked `@pytest.mark.blender` and
 run via `scripts/run_tests.py`.
 """

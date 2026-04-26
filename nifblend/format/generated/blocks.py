@@ -3774,17 +3774,33 @@ class NiKeyframeData(Block):
         if self.num_rotation_keys != 0:
             self.rotation_type = read_u32(stream)
         if self.rotation_type != 4:
-            ctx.push_arg(self.rotation_type)
+            ctx.push_template("Quaternion")
             try:
-                self.quaternion_keys = [QuatKey.read(stream, ctx) for _ in range(int(self.num_rotation_keys))]
+                ctx.push_arg(self.rotation_type)
+                try:
+                    self.quaternion_keys = [QuatKey.read(stream, ctx) for _ in range(int(self.num_rotation_keys))]
+                finally:
+                    ctx.pop_arg()
             finally:
-                ctx.pop_arg()
+                ctx.pop_template()
         if (ctx.version <= pack_version(10, 1, 0, 0)) and (self.rotation_type == 4):
             self.order = read_f32(stream)
         if self.rotation_type == 4:
-            self.xyz_rotations = [KeyGroup.read(stream, ctx) for _ in range(3)]
-        self.translations = KeyGroup.read(stream, ctx)
-        self.scales = KeyGroup.read(stream, ctx)
+            ctx.push_template("float")
+            try:
+                self.xyz_rotations = [KeyGroup.read(stream, ctx) for _ in range(3)]
+            finally:
+                ctx.pop_template()
+        ctx.push_template("Vector3")
+        try:
+            self.translations = KeyGroup.read(stream, ctx)
+        finally:
+            ctx.pop_template()
+        ctx.push_template("float")
+        try:
+            self.scales = KeyGroup.read(stream, ctx)
+        finally:
+            ctx.pop_template()
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
@@ -3792,19 +3808,35 @@ class NiKeyframeData(Block):
         if self.num_rotation_keys != 0:
             write_u32(stream, self.rotation_type)
         if self.rotation_type != 4:
-            ctx.push_arg(self.rotation_type)
+            ctx.push_template("Quaternion")
             try:
-                for __v in self.quaternion_keys:
-                    __v.write(stream, ctx)
+                ctx.push_arg(self.rotation_type)
+                try:
+                    for __v in self.quaternion_keys:
+                        __v.write(stream, ctx)
+                finally:
+                    ctx.pop_arg()
             finally:
-                ctx.pop_arg()
+                ctx.pop_template()
         if (ctx.version <= pack_version(10, 1, 0, 0)) and (self.rotation_type == 4):
             write_f32(stream, self.order)
         if self.rotation_type == 4:
-            for __v in self.xyz_rotations:
-                __v.write(stream, ctx)
-        self.translations.write(stream, ctx)
-        self.scales.write(stream, ctx)
+            ctx.push_template("float")
+            try:
+                for __v in self.xyz_rotations:
+                    __v.write(stream, ctx)
+            finally:
+                ctx.pop_template()
+        ctx.push_template("Vector3")
+        try:
+            self.translations.write(stream, ctx)
+        finally:
+            ctx.pop_template()
+        ctx.push_template("float")
+        try:
+            self.scales.write(stream, ctx)
+        finally:
+            ctx.pop_template()
 
 
 @dataclass(slots=True)
@@ -4985,11 +5017,15 @@ class NiTextKeyExtraData(Block):
         if (ctx.version >= pack_version(4, 0, 0, 0)) and (ctx.version <= pack_version(4, 2, 2, 0)):
             self.num_bytes = read_u32(stream)
         self.num_text_keys = read_u32(stream)
-        ctx.push_arg(1)
+        ctx.push_template("string")
         try:
-            self.text_keys = [Key.read(stream, ctx) for _ in range(int(self.num_text_keys))]
+            ctx.push_arg(1)
+            try:
+                self.text_keys = [Key.read(stream, ctx) for _ in range(int(self.num_text_keys))]
+            finally:
+                ctx.pop_arg()
         finally:
-            ctx.pop_arg()
+            ctx.pop_template()
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
@@ -5002,12 +5038,16 @@ class NiTextKeyExtraData(Block):
         if (ctx.version >= pack_version(4, 0, 0, 0)) and (ctx.version <= pack_version(4, 2, 2, 0)):
             write_u32(stream, self.num_bytes)
         write_u32(stream, self.num_text_keys)
-        ctx.push_arg(1)
+        ctx.push_template("string")
         try:
-            for __v in self.text_keys:
-                __v.write(stream, ctx)
+            ctx.push_arg(1)
+            try:
+                for __v in self.text_keys:
+                    __v.write(stream, ctx)
+            finally:
+                ctx.pop_arg()
         finally:
-            ctx.pop_arg()
+            ctx.pop_template()
 
 
 @dataclass(slots=True)
@@ -5399,17 +5439,33 @@ class NiTransformData(Block):
         if self.num_rotation_keys != 0:
             self.rotation_type = read_u32(stream)
         if self.rotation_type != 4:
-            ctx.push_arg(self.rotation_type)
+            ctx.push_template("Quaternion")
             try:
-                self.quaternion_keys = [QuatKey.read(stream, ctx) for _ in range(int(self.num_rotation_keys))]
+                ctx.push_arg(self.rotation_type)
+                try:
+                    self.quaternion_keys = [QuatKey.read(stream, ctx) for _ in range(int(self.num_rotation_keys))]
+                finally:
+                    ctx.pop_arg()
             finally:
-                ctx.pop_arg()
+                ctx.pop_template()
         if (ctx.version <= pack_version(10, 1, 0, 0)) and (self.rotation_type == 4):
             self.order = read_f32(stream)
         if self.rotation_type == 4:
-            self.xyz_rotations = [KeyGroup.read(stream, ctx) for _ in range(3)]
-        self.translations = KeyGroup.read(stream, ctx)
-        self.scales = KeyGroup.read(stream, ctx)
+            ctx.push_template("float")
+            try:
+                self.xyz_rotations = [KeyGroup.read(stream, ctx) for _ in range(3)]
+            finally:
+                ctx.pop_template()
+        ctx.push_template("Vector3")
+        try:
+            self.translations = KeyGroup.read(stream, ctx)
+        finally:
+            ctx.pop_template()
+        ctx.push_template("float")
+        try:
+            self.scales = KeyGroup.read(stream, ctx)
+        finally:
+            ctx.pop_template()
         return self
 
     def write(self, stream: IO[bytes], ctx: ReadContext) -> None:
@@ -5417,19 +5473,35 @@ class NiTransformData(Block):
         if self.num_rotation_keys != 0:
             write_u32(stream, self.rotation_type)
         if self.rotation_type != 4:
-            ctx.push_arg(self.rotation_type)
+            ctx.push_template("Quaternion")
             try:
-                for __v in self.quaternion_keys:
-                    __v.write(stream, ctx)
+                ctx.push_arg(self.rotation_type)
+                try:
+                    for __v in self.quaternion_keys:
+                        __v.write(stream, ctx)
+                finally:
+                    ctx.pop_arg()
             finally:
-                ctx.pop_arg()
+                ctx.pop_template()
         if (ctx.version <= pack_version(10, 1, 0, 0)) and (self.rotation_type == 4):
             write_f32(stream, self.order)
         if self.rotation_type == 4:
-            for __v in self.xyz_rotations:
-                __v.write(stream, ctx)
-        self.translations.write(stream, ctx)
-        self.scales.write(stream, ctx)
+            ctx.push_template("float")
+            try:
+                for __v in self.xyz_rotations:
+                    __v.write(stream, ctx)
+            finally:
+                ctx.pop_template()
+        ctx.push_template("Vector3")
+        try:
+            self.translations.write(stream, ctx)
+        finally:
+            ctx.pop_template()
+        ctx.push_template("float")
+        try:
+            self.scales.write(stream, ctx)
+        finally:
+            ctx.pop_template()
 
 
 @dataclass(slots=True)

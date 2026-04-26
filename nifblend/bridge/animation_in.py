@@ -59,6 +59,7 @@ import numpy.typing as npt
 
 from nifblend.format.generated.blocks import (
     NiControllerSequence,
+    NiTextKeyExtraData,
     NiTransformData,
     NiTransformInterpolator,
 )
@@ -75,6 +76,7 @@ __all__ = [
     "ROTATION_MODES",
     "AnimationData",
     "BoneTrack",
+    "BoneTrackMetadata",
     "animation_data_to_blender",
     "apply_rotation_mode_to_armature",
     "controller_sequence_to_animation_data",
@@ -114,6 +116,24 @@ _INTERP_NIF_TO_BLENDER: dict[int, str] = {
 
 
 # ---- pure datamodel -------------------------------------------------------
+
+
+@dataclass(slots=True)
+class BoneTrackMetadata:
+    """Per-bone :class:`ControlledBlock` state preserved verbatim for export.
+
+    KF *import* (Phase 5) decodes only the keyed payload; this dataclass
+    carries the surrounding :class:`ControlledBlock` metadata that
+    Blender's fcurve model can't represent natively, so the Phase 10
+    export side can rebuild a faithful ``ControlledBlock`` without
+    losing ``priority`` / controller-type bookkeeping.
+    """
+
+    priority: int = 0
+    controller_type: str = ""
+    controller_id: str = ""
+    interpolator_id: str = ""
+    property_type: str = ""
 
 
 @dataclass(slots=True)
@@ -166,6 +186,11 @@ class BoneTrack:
     #: One per axis when :attr:`rotation_euler` is populated.
     rotation_euler_interp: tuple[int | None, int | None, int | None] = (None, None, None)
     scale_interp: int | None = None
+    #: Per-bone :class:`ControlledBlock` metadata harvested in step 10d.
+    #: ``None`` when no source ControlledBlock was decoded (e.g. fixture
+    #: built without a ControlledBlock); otherwise carries the verbatim
+    #: priority + four string refs needed to re-emit on export.
+    metadata: BoneTrackMetadata | None = None
 
 
 @dataclass(slots=True)
@@ -188,6 +213,20 @@ class AnimationData:
     cycle_type: int = 0
     frequency: float = 1.0
     weight: float = 1.0
+    #: NiControllerSequence root-motion bone name (resolved from the
+    #: header string table). Empty when the sequence has no accum root.
+    accum_root_name: str = ""
+    #: NiControllerSequence accum-flags bitfield (Bethesda root-motion).
+    accum_flags: int = 0
+    #: Deprecated NiControllerSequence ``phase`` field; preserved for
+    #: round-trip fidelity (read on versions ≤ 10.4.0.1).
+    phase: float = 0.0
+    #: NiControllerSequence ``play_backwards`` flag; only present on the
+    #: 10.1.0.106 wire format. False elsewhere.
+    play_backwards: bool = False
+    #: Resolved :class:`NiTextKeyExtraData` rows (NIF seconds + name).
+    #: Empty when the sequence's ``text_keys`` ref is null or unresolved.
+    text_keys: list[tuple[float, str]] = field(default_factory=list)
     tracks: list[BoneTrack] = field(default_factory=list)
 
 
@@ -230,6 +269,13 @@ def controller_sequence_to_animation_data(
         if track is not None:
             tracks.append(track)
 
+    accum_root_name = _resolve_string(
+        getattr(sequence, "accum_root_name", None), table
+    )
+    text_keys = _resolve_text_keys(
+        getattr(sequence, "text_keys", -1), table
+    )
+
     return AnimationData(
         name=name or f"Sequence.{sequence_index}",
         fps=float(fps),
@@ -238,6 +284,11 @@ def controller_sequence_to_animation_data(
         cycle_type=int(getattr(sequence, "cycle_type", 0) or 0),
         frequency=float(getattr(sequence, "frequency", 1.0) or 1.0),
         weight=float(getattr(sequence, "weight", 1.0) or 1.0),
+        accum_root_name=accum_root_name,
+        accum_flags=int(getattr(sequence, "accum_flags", 0) or 0) & 0xFFFFFFFF,
+        phase=float(getattr(sequence, "phase", 0.0) or 0.0),
+        play_backwards=bool(getattr(sequence, "play_backwards", False)),
+        text_keys=text_keys,
         tracks=tracks,
     )
 
@@ -296,6 +347,22 @@ def _controlled_block_to_track(
         track.scale = _scalar_keys_to_array(data.scales, fps=fps)
         if track.scale.shape[0]:
             track.scale_interp = int(data.scales.interpolation)
+
+    track.metadata = BoneTrackMetadata(
+        priority=int(getattr(cb, "priority", 0) or 0) & 0xFF,
+        controller_type=_resolve_string(
+            getattr(cb, "controller_type", None), table
+        ),
+        controller_id=_resolve_string(
+            getattr(cb, "controller_id", None), table
+        ),
+        interpolator_id=_resolve_string(
+            getattr(cb, "interpolator_id", None), table
+        ),
+        property_type=_resolve_string(
+            getattr(cb, "property_type", None), table
+        ),
+    )
 
     return track
 
@@ -377,6 +444,33 @@ def _resolve_block(table: BlockTable, ref: int) -> Any | None:
     if ref < 0 or ref == _NULL_REF or ref >= len(table.blocks):
         return None
     return table.blocks[ref]
+
+
+def _resolve_text_keys(
+    ref: Any, table: BlockTable | None
+) -> list[tuple[float, str]]:
+    """Resolve a :class:`NiTextKeyExtraData` ref into ``[(time, name), ...]``.
+
+    Tolerates a missing / unresolved ref, a wrong-type target block, and
+    individual ``Key`` entries whose ``value`` (string-table index) is
+    ``None`` (the codegen template gap pre-Phase 10b).
+    """
+    if table is None:
+        return []
+    try:
+        idx = int(ref)
+    except (TypeError, ValueError):
+        return []
+    block = _resolve_block(table, idx)
+    if not isinstance(block, NiTextKeyExtraData):
+        return []
+    out: list[tuple[float, str]] = []
+    for key in block.text_keys or ():
+        if key is None:
+            continue
+        name = _resolve_string(getattr(key, "value", None), table)
+        out.append((float(getattr(key, "time", 0.0) or 0.0), name))
+    return out
 
 
 def _resolve_string(name_obj: Any, table: BlockTable | None) -> str:

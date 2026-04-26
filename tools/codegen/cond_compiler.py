@@ -34,10 +34,10 @@ from dataclasses import dataclass
 from .parser import Schema, VersionDef
 
 __all__ = [
-    "FieldResolver",
     "ExprCompiler",
-    "compile_versions_set",
+    "FieldResolver",
     "compile_version_literal",
+    "compile_versions_set",
 ]
 
 FieldResolver = Callable[[str], str]

@@ -1,6 +1,6 @@
-"""Vendored generated NIF/KF type code (placeholder).
+"""Reference-only placeholder for historical nifgen imports.
 
-This package will be populated with the schema-generated NIF type tree for the
-NIF/KF binary formats (Bethesda games). It is intentionally empty in the v0.1
-skeleton — see `UPSTREAM.md` for the vendoring plan and current blockers.
+NifBlend emits its runtime schema layer under `nifblend/format/generated/` via
+in-house codegen from `nifblend/schema/nif.xml`. See
+`docs/vendor/UPSTREAM_NIFGEN.md` for the original vendoring notes.
 """

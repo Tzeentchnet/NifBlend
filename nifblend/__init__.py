@@ -11,6 +11,7 @@ import bpy
 
 from . import preferences
 from .bridge import (
+    animation_props,
     armature_props,
     material_props,
     mesh_props,
@@ -26,6 +27,7 @@ from .ops import (
     games_morrowind,
     games_oblivion,
     games_skyrim,
+    games_starfield,
     import_batch,
     import_cell,
     import_kf,
@@ -72,6 +74,8 @@ _CLASSES: tuple[type, ...] = (
     games_fallout.NIFBLEND_OT_fo76_set_external_mesh,
     games_fallout.NIFBLEND_OT_fo76_clear_external_mesh,
     games_morrowind.NIFBLEND_OT_morrowind_split_classic_props,
+    games_starfield.NIFBLEND_OT_starfield_reload_external_mesh,
+    games_starfield.NIFBLEND_OT_starfield_reload_material,
     # LOD + sidebar panels.
     preview_lod.NIFBLEND_OT_lod_toggle_level,
     preview_lod.NIFBLEND_OT_lod_show_only,
@@ -86,6 +90,7 @@ _CLASSES: tuple[type, ...] = (
     sidebar.NIFBLEND_PT_game_fallout4,
     sidebar.NIFBLEND_PT_game_fallout76,
     sidebar.NIFBLEND_PT_game_fallout3nv,
+    sidebar.NIFBLEND_PT_game_starfield,
     sidebar.NIFBLEND_PT_game_morrowind,
     sidebar.NIFBLEND_PT_cell_workflow,
 )
@@ -134,6 +139,7 @@ def register() -> None:
     skin_props.register()
     object_props.register()
     mesh_props.register()
+    animation_props.register()
     textures.register()
     bpy.types.TOPBAR_MT_file_import.append(_menu_func_import)
     bpy.types.TOPBAR_MT_file_export.append(_menu_func_export)
@@ -143,6 +149,7 @@ def unregister() -> None:
     bpy.types.TOPBAR_MT_file_export.remove(_menu_func_export)
     bpy.types.TOPBAR_MT_file_import.remove(_menu_func_import)
     textures.unregister()
+    animation_props.unregister()
     mesh_props.unregister()
     object_props.unregister()
     skin_props.unregister()

@@ -52,6 +52,8 @@ def _install_bpy_stub() -> None:
     bpy.types.Mesh = type("Mesh", (), {})  # type: ignore[attr-defined]
     bpy.types.UILayout = type("UILayout", (), {})  # type: ignore[attr-defined]
     bpy.types.Scene = type("Scene", (), {})  # type: ignore[attr-defined]
+    bpy.types.Action = type("Action", (), {})  # type: ignore[attr-defined]
+    bpy.types.PoseBone = type("PoseBone", (), {})  # type: ignore[attr-defined]
 
     class _MenuStub:
         @staticmethod

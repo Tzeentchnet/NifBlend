@@ -17,6 +17,7 @@ from __future__ import annotations
 import bpy
 from bpy.types import Panel
 
+from nifblend.bridge.material_props import get_starfield_material_path
 from nifblend.bridge.object_props import object_profile
 from nifblend.format.versions import GameProfile
 
@@ -29,6 +30,7 @@ __all__ = [
     "NIFBLEND_PT_game_oblivion",
     "NIFBLEND_PT_game_skyrim",
     "NIFBLEND_PT_game_specific",
+    "NIFBLEND_PT_game_starfield",
     "NIFBLEND_PT_main",
     "NIFBLEND_PT_utilities",
     "NIFBLEND_UL_fo4_segments",
@@ -349,6 +351,57 @@ class NIFBLEND_PT_game_morrowind(_SidebarPanel, Panel):
             col.prop(props, "texturing_apply_mode")
             col.prop(props, "texturing_flags")
             col.prop(props, "texture_count")
+
+
+class NIFBLEND_PT_game_starfield(_SidebarPanel, Panel):
+    bl_idname = "NIFBLEND_PT_game_starfield"
+    bl_parent_id = "NIFBLEND_PT_game_specific"
+    bl_label = "Starfield (External Meshes)"
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        return active_profile(context) == GameProfile.STARFIELD
+
+    def draw(self, context: bpy.types.Context) -> None:
+        layout = self.layout
+        obj = context.active_object
+        if obj is None or getattr(obj, "type", "") != "MESH":
+            layout.label(text="Select a mesh.")
+            return
+        shape = getattr(obj.data, "nifblend_shape", None)
+        slots = list(getattr(shape, "fo76_slots", []) or []) if shape is not None else []
+        if slots:
+            layout.template_list(
+                "NIFBLEND_UL_fo76_slots",
+                "",
+                shape,
+                "fo76_slots",
+                shape,
+                "num_primitives",
+                rows=4,
+            )
+        else:
+            layout.label(text="(no external mesh references)")
+        layout.operator("nifblend.starfield_reload_external_mesh", icon="FILE_REFRESH")
+
+        # Phase 9i: Starfield .mat reload
+        mat_slots = list(getattr(obj.data, "materials", []) or [])
+        stamped: list[tuple[int, str]] = []
+        for idx, mslot in enumerate(mat_slots):
+            if mslot is None:
+                continue
+            stamp = get_starfield_material_path(mslot)
+            if stamp:
+                stamped.append((idx, stamp))
+        layout.separator()
+        layout.label(text="Starfield Material (.mat)")
+        if stamped:
+            for idx, rel in stamped:
+                row = layout.row()
+                row.label(text=f"[{idx}] {rel}", icon="MATERIAL")
+            layout.operator("nifblend.starfield_reload_material", icon="FILE_REFRESH")
+        else:
+            layout.label(text="(no .mat path stamped)")
 
 
 class NIFBLEND_PT_cell_workflow(_SidebarPanel, Panel):

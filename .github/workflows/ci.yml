@@ -23,10 +23,10 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Lint (ruff)
-        run: ruff check nifblend
+        run: ruff check --config tests/ruff.toml nifblend tools
 
       - name: Format check (ruff)
-        run: ruff format --check nifblend
+        run: ruff format --check --config tests/ruff.toml nifblend tools
 
       - name: Unit tests
-        run: pytest -v
+        run: pytest -c tests/pytest.ini -v

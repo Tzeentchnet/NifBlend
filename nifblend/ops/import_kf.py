@@ -33,6 +33,11 @@ from nifblend.bridge.animation_in import (
     apply_rotation_mode_to_armature,
     controller_sequence_to_animation_data,
 )
+from nifblend.bridge.animation_props import (
+    apply_controlled_block_to_pose_bone,
+    apply_sequence_metadata_to_action,
+    apply_text_keys_to_action,
+)
 from nifblend.io.block_table import read_nif
 from nifblend.io.kf import is_kf_file, kf_root_sequences
 
@@ -121,6 +126,8 @@ class NIFBLEND_OT_import_kf(Operator, ImportHelper):
                 target, anim, rotation_mode=self.rotation_mode
             )
             self._assign_action(target, action)
+            self._stamp_action_metadata(action, anim)
+            self._stamp_pose_bone_metadata(target, anim)
             unresolved_bones.update(self._unresolved_bones(target, anim))
             created += 1
 
@@ -172,3 +179,57 @@ class NIFBLEND_OT_import_kf(Operator, ImportHelper):
             for track in anim.tracks  # type: ignore[attr-defined]
             if pose_bones.get(track.bone_name) is None
         ]
+
+    def _stamp_action_metadata(self, action: object, anim: object) -> None:
+        """Stamp NiControllerSequence metadata + text keys onto ``action.nifblend``.
+
+        Step 10d back-fill: gives the Phase 10 export side a faithful
+        source for ``weight`` / ``frequency`` / ``cycle_type`` /
+        ``start_time`` / ``stop_time`` / ``accum_root_name`` /
+        ``accum_flags`` / ``phase`` / ``play_backwards`` plus the
+        resolved :class:`NiTextKeyExtraData` rows.
+        """
+        apply_sequence_metadata_to_action(
+            action,
+            weight=getattr(anim, "weight", 1.0),
+            frequency=getattr(anim, "frequency", 1.0),
+            start_time=getattr(anim, "start_time", 0.0),
+            stop_time=getattr(anim, "stop_time", 0.0),
+            cycle_type=getattr(anim, "cycle_type", 0),
+            accum_root_name=getattr(anim, "accum_root_name", ""),
+            accum_flags=getattr(anim, "accum_flags", 0),
+            phase=getattr(anim, "phase", 0.0),
+            play_backwards=getattr(anim, "play_backwards", False),
+        )
+        text_keys = getattr(anim, "text_keys", None) or []
+        if text_keys:
+            apply_text_keys_to_action(action, text_keys)
+
+    def _stamp_pose_bone_metadata(
+        self, armature_obj: bpy.types.Object, anim: object
+    ) -> None:
+        """Stamp per-bone :class:`ControlledBlock` metadata onto matching pose bones.
+
+        Step 10d back-fill: pose bones missing from the armature pose are
+        skipped silently (the same bones are already reported via
+        :meth:`_unresolved_bones`).
+        """
+        pose = getattr(armature_obj, "pose", None)
+        pose_bones = getattr(pose, "bones", None) if pose is not None else None
+        if pose_bones is None:
+            return
+        for track in anim.tracks:  # type: ignore[attr-defined]
+            metadata = getattr(track, "metadata", None)
+            if metadata is None:
+                continue
+            bone = pose_bones.get(track.bone_name)
+            if bone is None:
+                continue
+            apply_controlled_block_to_pose_bone(
+                bone,
+                priority=metadata.priority,
+                controller_type=metadata.controller_type,
+                controller_id=metadata.controller_id,
+                interpolator_id=metadata.interpolator_id,
+                property_type=metadata.property_type,
+            )

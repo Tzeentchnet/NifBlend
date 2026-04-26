@@ -9,9 +9,9 @@ Thanks for helping! Two lightweight rules keep the project honest:
 
 - **What** we're building, **why**, and **in what order**: see [`ROADMAP.md`](ROADMAP.md).
 - **What has shipped** in each release: see [`CHANGELOG.md`](CHANGELOG.md).
-- **Architecture**: clean-room Blender bridge on top of a vendored `nifgen` schema layer. Don't modify `nifblend/vendor/nifgen/` in feature PRs — upstream syncs are separate commits.
+- **Architecture**: clean-room Blender bridge on top of an in-house generated schema layer emitted from the pinned `nifblend/schema/nif.xml` snapshot. Don't hand-edit `nifblend/format/generated/`; update `tools/codegen/` and regenerate instead.
 
 ## Code style
 
 - `ruff` for lint + format
-- Tests via `pytest`; Blender-integration tests run headless via `blender --background -P scripts/run_tests.py`
+- Tests via `pytest -c tests/pytest.ini`; Blender-integration tests run headless via `blender --background -P scripts/run_tests.py`

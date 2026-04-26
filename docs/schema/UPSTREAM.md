@@ -16,17 +16,18 @@
 NifBlend is standalone — we do not depend on any niftools or cobra-tools toolchain at
 build or runtime. `nif.xml` is the canonical NIF binary-format schema and is treated
 here as a frozen GPL-3.0 data snapshot. Our own codegen
-(`tools/codegen/`, dev-time only) consumes this file to emit the typed Python classes
-under `nifblend/format/generated/`.
+([`tools/codegen/`](../../tools/codegen/), dev-time only) consumes
+[`nifblend/schema/nif.xml`](../../nifblend/schema/nif.xml) to emit the typed Python
+classes under [`nifblend/format/generated/`](../../nifblend/format/generated/).
 
 ## License
 
 `nif.xml` is GPL-3.0. Generated code derived from it inherits GPL-3.0, which matches
-the repository's `LICENSE`.
+the repository's [`LICENSE`](../../LICENSE).
 
 ## Updating
 
-1. Pick a new upstream commit, fetch the raw XML, replace this file.
-2. Update the SHA, date, and SHA-256 above.
+1. Pick a new upstream commit, fetch the raw XML, and replace [`nifblend/schema/nif.xml`](../../nifblend/schema/nif.xml).
+2. Update the commit, date, file size, and SHA-256 above.
 3. Re-run `python -m tools.codegen --schema nifblend/schema/nif.xml --out nifblend/format/generated/`.
-4. Review the diff in `nifblend/format/generated/`, run `pytest`, commit.
+4. Review the diff in [`nifblend/format/generated/`](../../nifblend/format/generated/), run `pytest -c tests/pytest.ini`, commit.

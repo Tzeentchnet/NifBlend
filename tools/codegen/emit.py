@@ -713,8 +713,124 @@ def _resolver_for_field(f: Field, ctx: _EmitContext) -> FieldResolver:
     return _make_resolver(set())
 
 
+# ---- template-value dispatch (for `<field type="#T#">`) ------------------
+#
+# `Key`, `KeyGroup`, and `QuatKey` are `<struct generic="true">` in the schema.
+# Their `#T#`-typed fields (`Key.value`, `Key.forward`, `Key.backward`,
+# `QuatKey.value`) read a different concrete type per call site — driven by the
+# parent field's `template=` attribute (e.g. `<field name="Translations"
+# type="KeyGroup" template="Vector3">` makes the inner `Key.value` a
+# `Vector3`). We resolve this at runtime via a `ctx.template` stack: callers
+# push the concrete name around the nested read; the inner `#T#` field
+# dispatches on `ctx.template`.
+#
+# Supported template values are the union of those used by the schema's
+# generic compound instantiations: scalar primitives (`float`, `byte`),
+# colour primitives (`Color4`, `ByteColor4`), vectors (`Vector3`),
+# rotations (`Quaternion`), and the `string` Compound (used by
+# `NiTextKeyExtraData`'s text-keys list).
+
+_TEMPLATE_PRIMITIVES: dict[str, tuple[str, str]] = {
+    # template name → (reader_call_template, writer_call_template).
+    # `{value}` is substituted with the value expression on the writer side.
+    "float": ("read_f32(stream)", "write_f32(stream, {value})"),
+    "byte": ("read_u8(stream)", "write_u8(stream, {value})"),
+}
+
+# Compound template values (each emitted as a Compound subclass in
+# `structs.py`). For a runtime dispatch the generated code calls
+# `<Class>.read(stream, ctx)` / `<value>.write(stream, ctx)`.
+_TEMPLATE_COMPOUNDS: tuple[str, ...] = (
+    "Vector3",
+    "Quaternion",
+    "Color4",
+    "ByteColor4",
+    "string",
+)
+
+
+def _emit_template_value_read(attr: str, indent: str) -> str:
+    """Emit an inline if/elif dispatch on `ctx.template` for a `#T#` field."""
+    buf = StringIO()
+    first = True
+    for tmpl, (reader, _writer) in _TEMPLATE_PRIMITIVES.items():
+        kw = "if" if first else "elif"
+        buf.write(f'{indent}{kw} ctx.template == "{tmpl}":\n')
+        buf.write(f"{indent}    {attr} = {reader}\n")
+        first = False
+    for tmpl in _TEMPLATE_COMPOUNDS:
+        buf.write(f'{indent}elif ctx.template == "{tmpl}":\n')
+        buf.write(f"{indent}    {attr} = {tmpl}.read(stream, ctx)\n")
+    buf.write(f"{indent}else:\n")
+    buf.write(
+        f"{indent}    raise NotImplementedError("
+        f'f"unsupported template type for #T# field: {{ctx.template!r}}")\n'
+    )
+    return buf.getvalue()
+
+
+def _emit_template_value_write(value_expr: str, indent: str) -> str:
+    """Emit an inline if/elif dispatch on `ctx.template` for writing a `#T#` field."""
+    buf = StringIO()
+    first = True
+    for tmpl, (_reader, writer_tpl) in _TEMPLATE_PRIMITIVES.items():
+        kw = "if" if first else "elif"
+        buf.write(f'{indent}{kw} ctx.template == "{tmpl}":\n')
+        buf.write(f"{indent}    {writer_tpl.format(value=value_expr)}\n")
+        first = False
+    for tmpl in _TEMPLATE_COMPOUNDS:
+        buf.write(f'{indent}elif ctx.template == "{tmpl}":\n')
+        buf.write(f"{indent}    {value_expr}.write(stream, ctx)\n")
+    buf.write(f"{indent}else:\n")
+    buf.write(
+        f"{indent}    raise NotImplementedError("
+        f'f"unsupported template type for #T# field: {{ctx.template!r}}")\n'
+    )
+    return buf.getvalue()
+
+
+def _template_push_pop(f: Field) -> tuple[str, str]:
+    """Return ``(push_call, pop_call)`` for a field with `template=` attr.
+
+    Concrete templates (``template="Vector3"``) emit a real
+    `ctx.push_template(...)` / `ctx.pop_template()` pair. Pass-through
+    templates (``template="#T#"``) propagate the parent stack — no push,
+    no pop.
+    """
+    tmpl = f.template
+    if tmpl is None or tmpl == "#T#":
+        return "", ""
+    return f'ctx.push_template("{tmpl}")', "ctx.pop_template()"
+
+
+def _wrap_template(body: str, f: Field, indent: str) -> str:
+    """Wrap ``body`` in a `ctx.push_template(...) / try: ... finally: ctx.pop_template()`
+    block when ``f.template`` is concrete; otherwise return ``body`` unchanged.
+
+    ``body`` is expected to be already-indented Python source whose statements
+    sit at ``indent``. The wrapped output bumps each statement by 4 spaces so
+    it sits inside the ``try:`` block.
+    """
+    push, pop = _template_push_pop(f)
+    if not push:
+        return body
+    inner = "".join(("    " + line if line.strip() else line) for line in body.splitlines(True))
+    return (
+        f"{indent}{push}\n"
+        f"{indent}try:\n"
+        f"{inner}"
+        f"{indent}finally:\n"
+        f"{indent}    {pop}\n"
+    )
+
+
 def _emit_field_read_body(f: Field, ctx: _EmitContext, indent: str) -> str:
     attr = f"self.{_snake(f.name)}"
+
+    # `#T#`-typed field: dispatch on ctx.template at runtime.
+    if f.type == "#T#":
+        return _emit_template_value_read(attr, indent)
+
     type_kind = ctx.kind(f.type)
 
     if f.length is not None:
@@ -740,7 +856,7 @@ def _emit_field_read_body(f: Field, ctx: _EmitContext, indent: str) -> str:
             except Exception as exc:
                 arg_expr = "0"
                 arg_comment = f"{indent}# CODEGEN-TODO arg {f.arg!r}; {_safe_comment(str(exc))}\n"
-            return (
+            body = (
                 f"{arg_comment}"
                 f"{indent}ctx.push_arg({arg_expr})\n"
                 f"{indent}try:\n"
@@ -748,7 +864,8 @@ def _emit_field_read_body(f: Field, ctx: _EmitContext, indent: str) -> str:
                 f"{indent}finally:\n"
                 f"{indent}    ctx.pop_arg()\n"
             )
-        return f"{indent}{attr} = {cls}.read(stream, ctx)\n"
+            return _wrap_template(body, f, indent)
+        return _wrap_template(f"{indent}{attr} = {cls}.read(stream, ctx)\n", f, indent)
 
     return f"{indent}# CODEGEN-TODO: unknown type {f.type!r} for field {f.name!r}\n"
 
@@ -789,7 +906,7 @@ def _emit_array_read(f: Field, ctx: _EmitContext, indent: str, attr: str, type_k
             except Exception as exc:
                 arg_expr = "0"
                 arg_comment = f"{indent}# CODEGEN-TODO arg {f.arg!r}; {_safe_comment(str(exc))}\n"
-            return (
+            body = (
                 f"{arg_comment}"
                 f"{indent}ctx.push_arg({arg_expr})\n"
                 f"{indent}try:\n"
@@ -798,9 +915,11 @@ def _emit_array_read(f: Field, ctx: _EmitContext, indent: str, attr: str, type_k
                 f"{indent}finally:\n"
                 f"{indent}    ctx.pop_arg()\n"
             )
-        return (
+            return _wrap_template(body, f, indent)
+        body = (
             f"{indent}{attr} = [{cls}.read(stream, ctx) for _ in range({_wrap_int(length_expr)})]\n"
         )
+        return _wrap_template(body, f, indent)
 
     return f"{indent}# CODEGEN-TODO: unknown array element type {f.type!r}\n"
 
@@ -955,6 +1074,11 @@ def _emit_field_write(f: Field, ctx: _EmitContext, indent: str) -> str:
 
 def _emit_field_write_body(f: Field, ctx: _EmitContext, indent: str) -> str:
     attr = f"self.{_snake(f.name)}"
+
+    # `#T#`-typed field: dispatch on ctx.template at runtime.
+    if f.type == "#T#":
+        return _emit_template_value_write(attr, indent)
+
     type_kind = ctx.kind(f.type)
 
     if f.length is not None:
@@ -980,7 +1104,7 @@ def _emit_field_write_body(f: Field, ctx: _EmitContext, indent: str) -> str:
                     arg_comment = (
                         f"{indent}# CODEGEN-TODO arg {f.arg!r}; {_safe_comment(str(exc))}\n"
                     )
-                return (
+                body = (
                     f"{arg_comment}"
                     f"{indent}ctx.push_arg({arg_expr})\n"
                     f"{indent}try:\n"
@@ -989,7 +1113,9 @@ def _emit_field_write_body(f: Field, ctx: _EmitContext, indent: str) -> str:
                     f"{indent}finally:\n"
                     f"{indent}    ctx.pop_arg()\n"
                 )
-            return f"{indent}for __v in {attr}:\n{indent}    __v.write(stream, ctx)\n"
+                return _wrap_template(body, f, indent)
+            body = f"{indent}for __v in {attr}:\n{indent}    __v.write(stream, ctx)\n"
+            return _wrap_template(body, f, indent)
         return f"{indent}# CODEGEN-TODO: unknown array elem write {f.type!r}\n"
 
     if type_kind == "basic":
@@ -1010,7 +1136,7 @@ def _emit_field_write_body(f: Field, ctx: _EmitContext, indent: str) -> str:
             except Exception as exc:
                 arg_expr = "0"
                 arg_comment = f"{indent}# CODEGEN-TODO arg {f.arg!r}; {_safe_comment(str(exc))}\n"
-            return (
+            body = (
                 f"{arg_comment}"
                 f"{indent}ctx.push_arg({arg_expr})\n"
                 f"{indent}try:\n"
@@ -1018,7 +1144,8 @@ def _emit_field_write_body(f: Field, ctx: _EmitContext, indent: str) -> str:
                 f"{indent}finally:\n"
                 f"{indent}    ctx.pop_arg()\n"
             )
-        return f"{indent}{attr}.write(stream, ctx)\n"
+            return _wrap_template(body, f, indent)
+        return _wrap_template(f"{indent}{attr}.write(stream, ctx)\n", f, indent)
 
     return f"{indent}# CODEGEN-TODO: unknown type write {f.type!r}\n"
 

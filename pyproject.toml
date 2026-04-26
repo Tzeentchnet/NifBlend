@@ -34,8 +34,8 @@ dev = [
 
 [project.urls]
 Repository = "https://github.com/kennpet/NifBlend"
-Changelog = "https://github.com/kennpet/NifBlend/blob/main/CHANGELOG.md"
-Roadmap = "https://github.com/kennpet/NifBlend/blob/main/ROADMAP.md"
+Changelog = "https://github.com/kennpet/NifBlend/blob/main/docs/CHANGELOG.md"
+Roadmap = "https://github.com/kennpet/NifBlend/blob/main/docs/ROADMAP.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["nifblend"]

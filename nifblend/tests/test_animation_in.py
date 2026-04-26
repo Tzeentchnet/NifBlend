@@ -20,11 +20,13 @@ from nifblend.bridge.animation_in import (
     DEFAULT_FPS,
     AnimationData,
     BoneTrack,
+    BoneTrackMetadata,
     animation_data_to_blender,
     controller_sequence_to_animation_data,
 )
 from nifblend.format.generated.blocks import (
     NiControllerSequence,
+    NiTextKeyExtraData,
     NiTransformData,
     NiTransformInterpolator,
 )
@@ -554,3 +556,122 @@ def test_end_to_end_decoder_then_wrapper(fake_bpy: SimpleNamespace) -> None:
     }
     # 3 location + 4 quaternion + 3 scale = 10 fcurves.
     assert len(action.fcurves.created) == 10
+
+
+# ---- step 10d: metadata back-fill ----------------------------------------
+
+
+def test_decoder_back_fills_sequence_metadata() -> None:
+    """Step 10d: sequence-level fields (accum_root_name / accum_flags /
+    phase / play_backwards) are stamped onto :class:`AnimationData`."""
+    table, idx = _build_sequence(
+        name="Walk",
+        bone_name_idx_pairs=[],
+        extra_strings=["NPC Root [Root]"],
+    )
+    seq = table.blocks[idx]
+    seq.accum_root_name = nif_string(index=1)  # "NPC Root [Root]"
+    seq.accum_flags = 0xDEADBEEF
+    seq.phase = 0.125
+    seq.play_backwards = True
+
+    anim = controller_sequence_to_animation_data(table, idx)  # type: ignore[arg-type]
+
+    assert anim.accum_root_name == "NPC Root [Root]"
+    assert anim.accum_flags == 0xDEADBEEF
+    assert anim.phase == pytest.approx(0.125)
+    assert anim.play_backwards is True
+
+
+def test_decoder_back_fills_text_keys_when_ref_resolves() -> None:
+    """Step 10d: ``NiTextKeyExtraData`` rows surface as ``[(time, name), ...]``
+    on :attr:`AnimationData.text_keys`."""
+    text_block = NiTextKeyExtraData(
+        name=nif_string(index=0xFFFFFFFF),
+        num_text_keys=2,
+        text_keys=[
+            Key(time=0.0, value=nif_string(index=1)),
+            Key(time=1.0, value=nif_string(index=2)),
+        ],
+    )
+
+    table, idx = _build_sequence(
+        name="Walk",
+        bone_name_idx_pairs=[],
+        extra_strings=["start", "end"],
+    )
+    text_idx = len(table.blocks)
+    table.blocks.append(text_block)
+    seq = table.blocks[idx]
+    seq.text_keys = text_idx
+
+    anim = controller_sequence_to_animation_data(table, idx)  # type: ignore[arg-type]
+
+    assert anim.text_keys == [(0.0, "start"), (1.0, "end")]
+
+
+def test_decoder_text_keys_empty_when_ref_null() -> None:
+    table, idx = _build_sequence(name="A", bone_name_idx_pairs=[])
+    table.blocks[idx].text_keys = -1
+
+    anim = controller_sequence_to_animation_data(table, idx)  # type: ignore[arg-type]
+
+    assert anim.text_keys == []
+
+
+def test_decoder_back_fills_controlled_block_metadata() -> None:
+    """Step 10d: per-bone ControlledBlock priority + four string refs
+    are harvested into :class:`BoneTrackMetadata`."""
+    data = NiTransformData(
+        num_rotation_keys=0,
+        rotation_type=int(KeyType.LINEAR_KEY),
+        translations=_vec3_group([_vec3_key(0.0, 0.0, 0.0, 0.0)]),
+        scales=_scalar_group([]),
+    )
+    table, idx = _build_sequence(
+        name="A",
+        bone_name_idx_pairs=[("Bip01", data)],
+        extra_strings=["NiTransformController", "ctrl-id", "interp-id", "prop-type"],
+    )
+    # The controlled block lives at the sequence's controlled_blocks[0].
+    seq = table.blocks[idx]
+    cb = seq.controlled_blocks[0]
+    cb.priority = 42
+    cb.controller_type = nif_string(index=1)  # "NiTransformController"
+    cb.controller_id = nif_string(index=2)
+    cb.interpolator_id = nif_string(index=3)
+    cb.property_type = nif_string(index=4)
+
+    anim = controller_sequence_to_animation_data(table, idx)  # type: ignore[arg-type]
+
+    track = anim.tracks[0]
+    assert track.metadata is not None
+    assert isinstance(track.metadata, BoneTrackMetadata)
+    assert track.metadata.priority == 42
+    assert track.metadata.controller_type == "NiTransformController"
+    assert track.metadata.controller_id == "ctrl-id"
+    assert track.metadata.interpolator_id == "interp-id"
+    assert track.metadata.property_type == "prop-type"
+
+
+def test_decoder_metadata_defaults_when_unset() -> None:
+    """Empty/null string refs decode to empty strings; priority defaults to 0."""
+    data = NiTransformData(
+        num_rotation_keys=0,
+        rotation_type=int(KeyType.LINEAR_KEY),
+        translations=_vec3_group([_vec3_key(0.0, 0.0, 0.0, 0.0)]),
+        scales=_scalar_group([]),
+    )
+    table, idx = _build_sequence(
+        name="A", bone_name_idx_pairs=[("Bone", data)]
+    )
+
+    anim = controller_sequence_to_animation_data(table, idx)  # type: ignore[arg-type]
+
+    track = anim.tracks[0]
+    assert track.metadata is not None
+    assert track.metadata.priority == 0
+    assert track.metadata.controller_type == ""
+    assert track.metadata.controller_id == ""
+    assert track.metadata.interpolator_id == ""
+    assert track.metadata.property_type == ""

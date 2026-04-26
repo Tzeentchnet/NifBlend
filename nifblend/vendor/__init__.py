@@ -1,1 +1,1 @@
-"""Vendored third-party code (GPL-3.0). See nifgen/UPSTREAM.md."""
+"""Reference-only vendor namespace. See docs/vendor/UPSTREAM_NIFGEN.md."""

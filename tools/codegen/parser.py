@@ -37,19 +37,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 __all__ = [
-    "Schema",
-    "NifObject",
-    "Struct",
-    "Field",
-    "Enum",
-    "EnumOption",
-    "BitFlags",
+    "Basic",
     "BitField",
     "BitFieldMember",
-    "Basic",
-    "VersionDef",
+    "BitFlags",
+    "Enum",
+    "EnumOption",
+    "Field",
+    "NifObject",
+    "Schema",
+    "Struct",
     "Token",
     "TokenEntry",
+    "VersionDef",
     "parse_schema",
 ]
 

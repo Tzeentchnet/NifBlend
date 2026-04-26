@@ -240,3 +240,135 @@ def test_iter_controller_sequences_in_mixed_nif_with_other_blocks() -> None:
     table = _sse_table([NiNode(), shape, seq], roots=[0])
     assert is_kf_file(table) is False
     assert list(iter_controller_sequences(table)) == [seq]
+
+
+# ---- Phase 10b: real keyed-data round-trip --------------------------------
+
+
+def test_kf_round_trip_with_real_transform_data() -> None:
+    """End-to-end keyed-animation round-trip exercising the Phase 10b
+    `#T#` template widening:
+
+    Build a `NiControllerSequence` carrying one `ControlledBlock` →
+    `NiTransformInterpolator` → `NiTransformData` with translation
+    (`KeyGroup<Vector3>`), quaternion rotation (`QuatKey<Quaternion>` list),
+    and scale (`KeyGroup<float>`) channels, write through `write_nif`,
+    re-read via `read_nif`, and assert every key's `.time` and `.value`
+    survives.
+    """
+    from nifblend.format.generated.blocks import (
+        NiTransformData,
+        NiTransformInterpolator,
+    )
+    from nifblend.format.generated.structs import (
+        ControlledBlock,
+        Key,
+        KeyGroup,
+        NiQuatTransform,
+        Quaternion,
+        QuatKey,
+        Vector3,
+    )
+
+    # Translation: 3 Vector3 keys
+    trans_keys = [
+        Key(time=0.0, value=Vector3(x=0.0, y=0.0, z=0.0)),
+        Key(time=1.0, value=Vector3(x=1.0, y=2.0, z=3.0)),
+        Key(time=2.0, value=Vector3(x=4.0, y=5.0, z=6.0)),
+    ]
+    translations = KeyGroup(num_keys=3, interpolation=1, keys=trans_keys)
+
+    # Rotation: 2 quaternion keys, LINEAR_KEY interpolation
+    rot_keys = [
+        QuatKey(time=0.0, value=Quaternion(w=1.0, x=0.0, y=0.0, z=0.0)),
+        QuatKey(time=2.0, value=Quaternion(w=0.7071, x=0.7071, y=0.0, z=0.0)),
+    ]
+
+    # Scale: 2 float keys
+    scale_keys = [Key(time=0.0, value=1.0), Key(time=2.0, value=1.5)]
+    scales = KeyGroup(num_keys=2, interpolation=1, keys=scale_keys)
+
+    data = NiTransformData(
+        num_rotation_keys=2,
+        rotation_type=1,  # LINEAR_KEY (not XYZ_ROTATION_KEY=4)
+        quaternion_keys=rot_keys,
+        xyz_rotations=[],
+        translations=translations,
+        scales=scales,
+    )
+
+    # Identity static transform on the interpolator
+    interp = NiTransformInterpolator(
+        transform=NiQuatTransform(
+            translation=Vector3(x=0.0, y=0.0, z=0.0),
+            rotation=Quaternion(w=1.0, x=0.0, y=0.0, z=0.0),
+            scale=1.0,
+            trs_valid=[],
+        ),
+        data=2,  # ref into the block table → NiTransformData at index 2
+    )
+
+    # ControlledBlock: SSE-shaped (v20.2.0.7), direct string refs.
+    cb = ControlledBlock(
+        interpolator=1,  # → NiTransformInterpolator at index 1
+        controller=-1,
+        priority=0,
+        node_name=nif_string(index=0xFFFFFFFF),
+        property_type=nif_string(index=0xFFFFFFFF),
+        controller_type=nif_string(index=0xFFFFFFFF),
+        controller_id=nif_string(index=0xFFFFFFFF),
+        interpolator_id=nif_string(index=0xFFFFFFFF),
+    )
+
+    seq = _empty_sequence()
+    seq.num_controlled_blocks = 1
+    seq.controlled_blocks = [cb]
+    seq.start_time = 0.0
+    seq.stop_time = 2.0
+
+    table = _sse_table([seq, interp, data], roots=[0])
+
+    sink = io.BytesIO()
+    write_nif(sink, table)
+    parsed = read_nif(io.BytesIO(sink.getvalue()))
+
+    assert parsed.header.num_blocks == 3
+    assert is_kf_file(parsed) is True
+    [rt_seq] = kf_root_sequences(parsed)
+    assert isinstance(rt_seq, NiControllerSequence)
+    assert rt_seq.num_controlled_blocks == 1
+
+    [rt_cb] = rt_seq.controlled_blocks
+    assert rt_cb.interpolator == 1
+
+    rt_interp = parsed.blocks[1]
+    assert isinstance(rt_interp, NiTransformInterpolator)
+    assert rt_interp.data == 2
+
+    rt_data = parsed.blocks[2]
+    assert isinstance(rt_data, NiTransformData)
+    assert rt_data.num_rotation_keys == 2
+    assert rt_data.rotation_type == 1
+
+    # Translation keys
+    assert rt_data.translations.num_keys == 3
+    assert len(rt_data.translations.keys) == 3
+    for orig, decoded in zip(trans_keys, rt_data.translations.keys, strict=True):
+        assert decoded.time == pytest.approx(orig.time)
+        assert decoded.value.x == pytest.approx(orig.value.x)
+        assert decoded.value.y == pytest.approx(orig.value.y)
+        assert decoded.value.z == pytest.approx(orig.value.z)
+
+    # Quaternion keys
+    assert len(rt_data.quaternion_keys) == 2
+    for orig, decoded in zip(rot_keys, rt_data.quaternion_keys, strict=True):
+        assert decoded.time == pytest.approx(orig.time)
+        assert decoded.value.w == pytest.approx(orig.value.w, rel=1e-5)
+        assert decoded.value.x == pytest.approx(orig.value.x, rel=1e-5)
+        assert decoded.value.y == pytest.approx(orig.value.y, abs=1e-5)
+        assert decoded.value.z == pytest.approx(orig.value.z, abs=1e-5)
+
+    # Scale keys
+    assert rt_data.scales.num_keys == 2
+    assert [k.time for k in rt_data.scales.keys] == pytest.approx([0.0, 2.0])
+    assert [k.value for k in rt_data.scales.keys] == pytest.approx([1.0, 1.5])

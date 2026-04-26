@@ -85,12 +85,9 @@ def _write_kf_to_disk(table: BlockTable) -> str:
     """Serialise ``table`` to a tempfile path that the operator can open."""
     sink = io.BytesIO()
     write_nif(sink, table)
-    fh = tempfile.NamedTemporaryFile(suffix=".kf", delete=False)
-    try:
+    with tempfile.NamedTemporaryFile(suffix=".kf", delete=False) as fh:
         fh.write(sink.getvalue())
-    finally:
-        fh.close()
-    return fh.name
+        return fh.name
 
 
 def _write_nif_only_table_to_disk() -> str:
@@ -111,12 +108,9 @@ def _write_nif_only_table_to_disk() -> str:
     table = BlockTable(header=h, blocks=[], footer=Footer(), ctx=ctx)
     sink = io.BytesIO()
     write_nif(sink, table)
-    fh = tempfile.NamedTemporaryFile(suffix=".kf", delete=False)
-    try:
+    with tempfile.NamedTemporaryFile(suffix=".kf", delete=False) as fh:
         fh.write(sink.getvalue())
-    finally:
-        fh.close()
-    return fh.name
+        return fh.name
 
 
 # ---- fakes ---------------------------------------------------------------
@@ -348,3 +342,105 @@ def test_armature_enum_items_lists_armature_objects_only() -> None:
     ctx = SimpleNamespace(scene=_FakeScene([rig, mesh]))
     items = import_kf_mod._armature_enum_items(None, ctx)
     assert [i[0] for i in items] == ["Rig"]
+
+
+# ---- step 10d metadata back-fill -----------------------------------------
+
+
+def test_stamp_action_metadata_writes_sequence_fields() -> None:
+    from nifblend.bridge.animation_in import AnimationData
+    from nifblend.bridge.animation_props import (
+        read_sequence_metadata_from_action,
+        read_text_keys_from_action,
+    )
+
+    op = NIFBLEND_OT_import_kf()
+    action = SimpleNamespace(name="walk")
+    anim = AnimationData(
+        name="walk",
+        weight=0.75,
+        frequency=2.0,
+        start_time=0.5,
+        stop_time=4.5,
+        cycle_type=1,
+        accum_root_name="NPC Root [Root]",
+        accum_flags=0xDEADBEEF,
+        phase=0.125,
+        play_backwards=True,
+        text_keys=[(0.0, "start"), (1.0, "end")],
+    )
+    op._stamp_action_metadata(action, anim)
+
+    read = read_sequence_metadata_from_action(action)
+    assert read is not None
+    assert read["weight"] == 0.75
+    assert read["frequency"] == 2.0
+    assert read["start_time"] == 0.5
+    assert read["stop_time"] == 4.5
+    assert read["cycle_type"] == 1
+    assert read["accum_root_name"] == "NPC Root [Root]"
+    assert read["accum_flags"] == 0xDEADBEEF
+    assert read["play_backwards"] is True
+    assert read_text_keys_from_action(action) == [(0.0, "start"), (1.0, "end")]
+
+
+def test_stamp_pose_bone_metadata_writes_controlled_block_fields() -> None:
+    from nifblend.bridge.animation_in import (
+        AnimationData,
+        BoneTrack,
+        BoneTrackMetadata,
+    )
+    from nifblend.bridge.animation_props import (
+        read_controlled_block_from_pose_bone,
+    )
+
+    op = NIFBLEND_OT_import_kf()
+    rig = _FakeArmatureObject("Rig", pose_bones=["Bip01"])
+    anim = AnimationData(
+        name="x",
+        tracks=[
+            BoneTrack(
+                bone_name="Bip01",
+                metadata=BoneTrackMetadata(
+                    priority=42,
+                    controller_type="NiTransformController",
+                    controller_id="ctrl",
+                    interpolator_id="interp",
+                    property_type="prop",
+                ),
+            ),
+            # A track for a missing bone is skipped silently.
+            BoneTrack(
+                bone_name="GHOST",
+                metadata=BoneTrackMetadata(priority=99),
+            ),
+        ],
+    )
+    op._stamp_pose_bone_metadata(rig, anim)
+
+    bone = rig.pose.bones.get("Bip01")
+    read = read_controlled_block_from_pose_bone(bone)
+    assert read == {
+        "priority": 42,
+        "controller_type": "NiTransformController",
+        "controller_id": "ctrl",
+        "interpolator_id": "interp",
+        "property_type": "prop",
+    }
+
+
+def test_stamp_pose_bone_metadata_noop_when_no_pose() -> None:
+    from nifblend.bridge.animation_in import (
+        AnimationData,
+        BoneTrack,
+        BoneTrackMetadata,
+    )
+
+    op = NIFBLEND_OT_import_kf()
+    rig = _FakeArmatureObject("Rig", pose_bones=None)
+    anim = AnimationData(
+        name="x",
+        tracks=[BoneTrack(bone_name="A", metadata=BoneTrackMetadata())],
+    )
+    # Just shouldn't raise.
+    op._stamp_pose_bone_metadata(rig, anim)
