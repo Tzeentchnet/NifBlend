@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from types import SimpleNamespace
 from typing import Any
 
@@ -13,7 +14,10 @@ from nifblend.bridge.armature_in import (
     ArmatureData,
     BoneData,
     armature_data_to_blender,
+    compute_world_transforms,
     ninode_tree_to_armature_data,
+    node_local_matrix,
+    world_matrix_to_trs,
 )
 from nifblend.bridge.armature_props import read_bind_matrix_from_props
 from nifblend.format.generated.blocks import NiNode
@@ -31,9 +35,15 @@ from nifblend.format.generated.structs import (
 
 def _identity_rot() -> Matrix33:
     return Matrix33(
-        m11=1.0, m21=0.0, m31=0.0,
-        m12=0.0, m22=1.0, m32=0.0,
-        m13=0.0, m23=0.0, m33=1.0,
+        m11=1.0,
+        m21=0.0,
+        m31=0.0,
+        m12=0.0,
+        m22=1.0,
+        m32=0.0,
+        m13=0.0,
+        m23=0.0,
+        m33=1.0,
     )
 
 
@@ -95,13 +105,9 @@ def test_parent_child_world_matrix_is_composed() -> None:
 
     assert [b.name for b in arm.bones] == ["Root", "Child"]
     assert arm.bones[1].parent == 0
-    np.testing.assert_array_almost_equal(
-        arm.bones[1].world_matrix[:3, 3], [10.0, 5.0, 0.0]
-    )
+    np.testing.assert_array_almost_equal(arm.bones[1].world_matrix[:3, 3], [10.0, 5.0, 0.0])
     # Local matrix is unchanged from the source NiNode.
-    np.testing.assert_array_almost_equal(
-        arm.bones[1].local_matrix[:3, 3], [0.0, 5.0, 0.0]
-    )
+    np.testing.assert_array_almost_equal(arm.bones[1].local_matrix[:3, 3], [0.0, 5.0, 0.0])
 
 
 def test_skip_root_drops_top_level_node_but_keeps_children() -> None:
@@ -116,9 +122,7 @@ def test_skip_root_drops_top_level_node_but_keeps_children() -> None:
     assert all(bone.parent == -1 for bone in arm.bones)
     # Root translation still propagates into the children's world matrices
     # via parent_world.
-    np.testing.assert_array_almost_equal(
-        arm.bones[0].world_matrix[:3, 3], [101.0, 0.0, 0.0]
-    )
+    np.testing.assert_array_almost_equal(arm.bones[0].world_matrix[:3, 3], [101.0, 0.0, 0.0])
 
 
 def test_non_ninode_children_are_skipped() -> None:
@@ -291,3 +295,146 @@ def test_blender_wrapper_stamps_bind_matrix_on_data_bones(fake_bpy: Any) -> None
         stored = read_bind_matrix_from_props(data_bone)
         assert stored is not None
         np.testing.assert_array_equal(stored, bone.local_matrix)
+
+
+# ---- compute_world_transforms (Phase 4 step 9) ----------------------------
+
+
+def _rot_z(angle_rad: float) -> Matrix33:
+    c, s = math.cos(angle_rad), math.sin(angle_rad)
+    return Matrix33(
+        m11=c,
+        m12=-s,
+        m13=0.0,
+        m21=s,
+        m22=c,
+        m23=0.0,
+        m31=0.0,
+        m32=0.0,
+        m33=1.0,
+    )
+
+
+def _rot_x(angle_rad: float) -> Matrix33:
+    c, s = math.cos(angle_rad), math.sin(angle_rad)
+    return Matrix33(
+        m11=1.0,
+        m12=0.0,
+        m13=0.0,
+        m21=0.0,
+        m22=c,
+        m23=-s,
+        m31=0.0,
+        m32=s,
+        m33=c,
+    )
+
+
+def _table_with_roots(blocks: list[Any], names: list[str], roots: list[int]) -> SimpleNamespace:
+    return SimpleNamespace(
+        blocks=blocks,
+        header=SimpleNamespace(
+            strings=[SizedString(length=len(s), value=list(s.encode("latin-1"))) for s in names],
+        ),
+        footer=SimpleNamespace(roots=roots),
+    )
+
+
+def test_compute_world_transforms_single_root_identity() -> None:
+    root = _node(name_idx=0)
+    table = _table_with_roots([root], ["Root"], roots=[0])
+    transforms = compute_world_transforms(table)  # type: ignore[arg-type]
+    assert set(transforms) == {0}
+    np.testing.assert_array_almost_equal(transforms[0], np.eye(4))
+
+
+def test_compute_world_transforms_reaches_non_ninode_leaf() -> None:
+    # A shape "block" only needs translation/rotation/scale, not a full
+    # NiNode -- compute_world_transforms must still reach it through the
+    # parent NiNode's children list.
+    shape = SimpleNamespace(translation=Vector3(0.0, 5.0, 0.0), rotation=_identity_rot(), scale=1.0)
+    root = _node(name_idx=0, translation=(10.0, 0.0, 0.0), children=[1])
+    table = _table_with_roots([root, shape], ["Root", "Shape"], roots=[0])
+    transforms = compute_world_transforms(table)  # type: ignore[arg-type]
+    assert set(transforms) == {0, 1}
+    np.testing.assert_array_almost_equal(transforms[1][:3, 3], [10.0, 5.0, 0.0])
+
+
+def test_compute_world_transforms_ignores_unreachable_blocks() -> None:
+    root = _node(name_idx=0)
+    orphan = _node(name_idx=1)  # not referenced by any root or children list
+    table = _table_with_roots([root, orphan], ["Root", "Orphan"], roots=[0])
+    transforms = compute_world_transforms(table)  # type: ignore[arg-type]
+    assert set(transforms) == {0}
+
+
+def test_compute_world_transforms_tolerates_cycles() -> None:
+    # Pathological graph: two nodes referencing each other. Must terminate.
+    a = _node(name_idx=0, children=[1])
+    b = _node(name_idx=1, children=[0])
+    table = _table_with_roots([a, b], ["A", "B"], roots=[0])
+    transforms = compute_world_transforms(table)  # type: ignore[arg-type]
+    assert set(transforms) == {0, 1}
+
+
+# ---- world_matrix_to_trs (Phase 4 step 9) ---------------------------------
+
+
+def test_world_matrix_to_trs_identity() -> None:
+    loc, euler, scale = world_matrix_to_trs(np.eye(4, dtype=np.float32))
+    assert loc == (0.0, 0.0, 0.0)
+    np.testing.assert_allclose(euler, (0.0, 0.0, 0.0), atol=1e-5)
+    assert scale == pytest.approx(1.0)
+
+
+def test_world_matrix_to_trs_translation_only() -> None:
+    m = np.eye(4, dtype=np.float32)
+    m[0, 3], m[1, 3], m[2, 3] = 1.0, 2.0, 3.0
+    loc, euler, scale = world_matrix_to_trs(m)
+    assert loc == pytest.approx((1.0, 2.0, 3.0))
+    np.testing.assert_allclose(euler, (0.0, 0.0, 0.0), atol=1e-5)
+    assert scale == pytest.approx(1.0)
+
+
+def test_world_matrix_to_trs_pure_z_rotation_recovers_yaw() -> None:
+    block = SimpleNamespace(
+        translation=Vector3(0.0, 0.0, 0.0), rotation=_rot_z(math.pi / 2), scale=1.0
+    )
+    m = node_local_matrix(block)
+    _loc, euler, scale = world_matrix_to_trs(m)
+    assert euler[0] == pytest.approx(0.0, abs=1e-5)
+    assert euler[1] == pytest.approx(0.0, abs=1e-5)
+    assert euler[2] == pytest.approx(math.pi / 2, abs=1e-4)
+    assert scale == pytest.approx(1.0)
+
+
+def test_world_matrix_to_trs_pure_x_rotation_recovers_roll() -> None:
+    block = SimpleNamespace(
+        translation=Vector3(0.0, 0.0, 0.0), rotation=_rot_x(math.pi / 3), scale=1.0
+    )
+    m = node_local_matrix(block)
+    _loc, euler, scale = world_matrix_to_trs(m)
+    assert euler[0] == pytest.approx(math.pi / 3, abs=1e-4)
+    assert euler[1] == pytest.approx(0.0, abs=1e-5)
+    assert euler[2] == pytest.approx(0.0, abs=1e-5)
+    assert scale == pytest.approx(1.0)
+
+
+def test_world_matrix_to_trs_uniform_scale_only() -> None:
+    m = np.eye(4, dtype=np.float32)
+    m[:3, :3] *= 2.0
+    loc, euler, scale = world_matrix_to_trs(m)
+    assert loc == (0.0, 0.0, 0.0)
+    np.testing.assert_allclose(euler, (0.0, 0.0, 0.0), atol=1e-5)
+    assert scale == pytest.approx(2.0)
+
+
+def test_world_matrix_to_trs_chained_uniform_scale_multiplies() -> None:
+    # Two nodes each scaled 2x composed together should accumulate to 4x,
+    # matching NIF's uniform-scale-per-node semantics.
+    parent = _node(name_idx=0, scale=2.0, children=[1])
+    child = _node(name_idx=1, scale=2.0)
+    table = _table_with_roots([parent, child], ["Parent", "Child"], roots=[0])
+    transforms = compute_world_transforms(table)  # type: ignore[arg-type]
+    _loc, _euler, scale = world_matrix_to_trs(transforms[1])
+    assert scale == pytest.approx(4.0)

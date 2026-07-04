@@ -24,11 +24,8 @@ import bpy
 from bpy.props import BoolProperty, IntProperty, StringProperty
 from bpy.types import Operator
 
-from nifblend.bridge.mesh_out import export_bstrishape
-from nifblend.format.base import ReadContext
-from nifblend.format.generated.structs import BSStreamHeader, ExportString, Footer, Header
-from nifblend.format.versions import pack_version
 from nifblend.io.block_table import BlockTable, write_nif
+from nifblend.ops.export_nif import build_export_table
 
 __all__ = [
     "BatchExportItem",
@@ -56,58 +53,28 @@ class BatchExportResult:
     error: str | None = None
 
 
-# ---- internal: header construction ---------------------------------------
-
-
-def _empty_export_string() -> ExportString:
-    return ExportString(length=0, value=[])
-
-
-def _sse_header() -> tuple[Header, ReadContext]:
-    """Skyrim SE-shaped header. Mirrors :mod:`nifblend.ops.export_nif`."""
-    h = Header(
-        version=pack_version(20, 2, 0, 7),
-        endian_type=1,
-        user_version=12,
-        num_blocks=0,
-        bs_header=BSStreamHeader(
-            bs_version=100,
-            author=_empty_export_string(),
-            process_script=_empty_export_string(),
-            export_script=_empty_export_string(),
-        ),
-        num_block_types=0,
-        block_types=[],
-        block_type_index=[],
-        num_strings=0,
-        max_string_length=0,
-        strings=[],
-        num_groups=0,
-    )
-    ctx = ReadContext(version=h.version, user_version=h.user_version, bs_version=100)
-    return h, ctx
-
-
 # ---- main-thread: build tables from Blender objects ----------------------
 
 
 def build_tables(
     objects: list[Any], output_dir: Path | str, *, suffix: str = ".nif"
 ) -> list[BatchExportItem]:
-    """Convert each mesh in ``objects`` into a single-shape ``BlockTable``.
+    """Convert each mesh in ``objects`` into its own single-shape ``BlockTable``.
 
     Filenames are derived from ``obj.name`` (Blender already enforces
     uniqueness within a scene). Anything that isn't a ``MESH`` is skipped
-    silently — operators add their own warnings.
+    silently — operators add their own warnings. Each table is built via
+    :func:`nifblend.ops.export_nif.build_export_table` (called with a
+    single-object list) so per-object transform, material, and skin +
+    armature wiring stays identical to the single-file export operator —
+    only the fan-out into one file per object differs here.
     """
     output_dir = Path(output_dir)
     items: list[BatchExportItem] = []
     for obj in objects:
         if getattr(obj, "type", None) != "MESH":
             continue
-        header, ctx = _sse_header()
-        block = export_bstrishape(obj.data, name=obj.name)
-        table = BlockTable(header=header, blocks=[block], footer=Footer(), ctx=ctx)
+        table = build_export_table([obj])
         items.append(BatchExportItem(path=output_dir / f"{obj.name}{suffix}", table=table))
     return items
 
@@ -133,9 +100,7 @@ def write_tables(
     """Serialise every item in parallel; result order matches input."""
     if not items:
         return []
-    workers = max_workers if max_workers and max_workers > 0 else min(
-        32, (os.cpu_count() or 1) + 4
-    )
+    workers = max_workers if max_workers and max_workers > 0 else min(32, (os.cpu_count() or 1) + 4)
     with ThreadPoolExecutor(max_workers=workers) as pool:
         return list(pool.map(_write_one, items))
 
@@ -168,9 +133,7 @@ class NIFBLEND_OT_export_batch(Operator):
         max=64,
     )
 
-    def invoke(
-        self, context: bpy.types.Context, _event: bpy.types.Event
-    ) -> set[str]:
+    def invoke(self, context: bpy.types.Context, _event: bpy.types.Event) -> set[str]:
         # Pop the standard folder picker so the user can pick a destination.
         context.window_manager.fileselect_add(self)
         return {"RUNNING_MODAL"}
@@ -179,9 +142,7 @@ class NIFBLEND_OT_export_batch(Operator):
         if not self.directory:
             self.report({"ERROR"}, "Pick an output folder")
             return {"CANCELLED"}
-        meshes = [
-            obj for obj in context.selected_objects if getattr(obj, "type", None) == "MESH"
-        ]
+        meshes = [obj for obj in context.selected_objects if getattr(obj, "type", None) == "MESH"]
         if not meshes:
             self.report({"WARNING"}, "Select at least one mesh object to export")
             return {"CANCELLED"}

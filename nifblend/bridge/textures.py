@@ -34,6 +34,7 @@ __all__ = [
     "RESOLUTION_MODES",
     "TextureAuditEntry",
     "audit_image_paths",
+    "is_path_within",
     "normalize_nif_relative",
     "relative_to_data_root",
     "resolve_texture_path",
@@ -54,6 +55,16 @@ def normalize_nif_relative(path: str) -> str:
     to forward slashes. Leading slashes are also stripped so the result
     is always a relative POSIX path.
 
+    Rejects (returns ``""`` for) any path containing a ``..`` / ``.``
+    component, or a component with a ``:`` in it (drive letters, NTFS
+    alternate data streams). These would otherwise let a NIF-embedded
+    path escape the configured Data root -- either via a literal
+    parent-directory walk, or via pathlib's "absolute right-hand side
+    discards the left-hand side" join behaviour when a drive-absolute
+    component reaches ``root / Path(*components)``. See
+    :func:`is_path_within` for the belt-and-suspenders check applied
+    after resolution too.
+
     Empty input returns ``""``.
     """
     if not path:
@@ -65,7 +76,26 @@ def normalize_nif_relative(path: str) -> str:
         parts.pop(0)
     if parts and parts[0].lower() == "data":
         parts.pop(0)
+    for part in parts:
+        if part in ("..", ".") or ":" in part or part in ("\\", "/"):
+            return ""
     return str(PurePosixPath(*parts)) if parts else ""
+
+
+def is_path_within(candidate: str | os.PathLike[str], root: str | os.PathLike[str]) -> bool:
+    """True when ``candidate`` resolves to a path under ``root``.
+
+    Resolves both sides (``strict=False`` -- neither has to exist) so
+    embedded ``..`` segments, symlinks, or a drive-absolute override that
+    hijacked an earlier ``root / Path(...)`` join are all caught here as
+    a last line of defence, regardless of how the escape happened.
+    """
+    try:
+        candidate_resolved = Path(os.fspath(candidate)).resolve(strict=False)
+        root_resolved = Path(os.fspath(root)).resolve(strict=False)
+    except OSError:
+        return False
+    return candidate_resolved.is_relative_to(root_resolved)
 
 
 def _resolve_case_insensitive(
@@ -76,7 +106,15 @@ def _resolve_case_insensitive(
     isdir: Callable[[str], bool],
     isfile: Callable[[str], bool],
 ) -> Path | None:
-    """Walk ``components`` under ``root`` doing per-level case-insensitive matching."""
+    """Walk ``components`` under ``root`` doing per-level case-insensitive matching.
+
+    Every candidate is verified to stay under ``root`` via
+    :func:`is_path_within` before it's returned or followed further --
+    a component that would resolve outside the root (a ``..`` segment or
+    a drive-absolute override that slipped past
+    :func:`normalize_nif_relative`) is rejected rather than silently
+    followed.
+    """
     if not isdir(str(root)):
         return None
     current = root
@@ -84,6 +122,8 @@ def _resolve_case_insensitive(
         is_last = idx == len(components) - 1
         # Fast path: exact match.
         candidate = current / comp
+        if not is_path_within(candidate, root):
+            return None
         if is_last and isfile(str(candidate)):
             return candidate
         if not is_last and isdir(str(candidate)):
@@ -99,6 +139,8 @@ def _resolve_case_insensitive(
             if entry.casefold() != target:
                 continue
             candidate = current / entry
+            if not is_path_within(candidate, root):
+                return None
             if is_last:
                 if isfile(str(candidate)):
                     return candidate
@@ -151,11 +193,17 @@ def resolve_texture_path(
 
     if mode == "STRICT":
         candidate = roots[0] / Path(*components)
+        if not is_path_within(candidate, roots[0]):
+            return None
         return candidate if isfile(str(candidate)) else None
 
     for root in roots:
         hit = _resolve_case_insensitive(
-            root, components, listdir=listdir, isdir=isdir, isfile=isfile,
+            root,
+            components,
+            listdir=listdir,
+            isdir=isdir,
+            isfile=isfile,
         )
         if hit is not None:
             return hit
@@ -185,7 +233,7 @@ def relative_to_data_root(
         return None
     if abs_parts[: len(root_parts)] != root_parts:
         return None
-    rel_parts = abs_path.parts[len(root_parts):]
+    rel_parts = abs_path.parts[len(root_parts) :]
     return str(PurePosixPath(*rel_parts)) if rel_parts else None
 
 
@@ -226,15 +274,19 @@ def audit_image_paths(
         rel = relative_to_data_root(filepath, data_root) if data_root else None
         if rel is None:
             rel = normalize_nif_relative(filepath)
-        resolved = resolve_texture_path(
-            rel,
-            data_root=data_root,
-            mode=mode,
-            extra_roots=extra_roots,
-            listdir=listdir,
-            isdir=isdir,
-            isfile=isfile,
-        ) if rel else None
+        resolved = (
+            resolve_texture_path(
+                rel,
+                data_root=data_root,
+                mode=mode,
+                extra_roots=extra_roots,
+                listdir=listdir,
+                isdir=isdir,
+                isfile=isfile,
+            )
+            if rel
+            else None
+        )
         out.append(
             TextureAuditEntry(
                 image_name=image_name,

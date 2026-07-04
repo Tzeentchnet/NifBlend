@@ -15,6 +15,7 @@ from nifblend.bridge.textures import (
     RESOLUTION_MODES,
     TextureAuditEntry,
     audit_image_paths,
+    is_path_within,
     normalize_nif_relative,
     relative_to_data_root,
     resolve_texture_path,
@@ -37,6 +38,17 @@ from nifblend.bridge.textures import (
         ("/textures/foo.dds", "textures/foo.dds"),
         ("", ""),
         ("data", ""),
+        # CWE-22: parent-directory escapes must never survive normalisation.
+        ("../../secret.dds", ""),
+        ("..\\..\\secret.dds", ""),
+        ("textures\\..\\..\\secret.dds", ""),
+        # A lone "." component is harmless (pathlib already collapses it
+        # during parsing) -- not a traversal, so it resolves normally.
+        ("./textures/foo.dds", "textures/foo.dds"),
+        # Drive-absolute / NTFS-ADS components must never survive either --
+        # a bare drive letter would hijack a later `root / Path(...)` join.
+        ("C:\\Windows\\win.ini", ""),
+        ("textures/foo.dds:hidden", ""),
     ],
 )
 def test_normalize_nif_relative(raw: str, expected: str) -> None:
@@ -63,7 +75,7 @@ def _build_fake_fs(paths: dict[str, bool]) -> tuple:
         out: set[str] = set()
         for k in paths:
             if k.startswith(prefix):
-                tail = k[len(prefix):].split("/", 1)[0]
+                tail = k[len(prefix) :].split("/", 1)[0]
                 out.add(tail)
         return sorted(out)
 
@@ -75,7 +87,9 @@ def test_resolve_texture_path_strict_hit(tmp_path: Path) -> None:
     target = tmp_path / "textures" / "foo" / "bar.dds"
     target.write_bytes(b"")
     hit = resolve_texture_path(
-        "textures/foo/bar.dds", data_root=tmp_path, mode="STRICT",
+        "textures/foo/bar.dds",
+        data_root=tmp_path,
+        mode="STRICT",
     )
     assert hit == target
 
@@ -92,17 +106,24 @@ def test_resolve_texture_path_strict_case_mismatch_misses(tmp_path: Path) -> Non
         "/data/textures/foo/bar.dds": False,
     }
     listdir, isdir, isfile = _build_fake_fs(fs)
-    assert resolve_texture_path(
-        "Textures/Foo/Bar.dds",
-        data_root="/data",
-        mode="STRICT",
-        listdir=listdir, isdir=isdir, isfile=isfile,
-    ) is None
+    assert (
+        resolve_texture_path(
+            "Textures/Foo/Bar.dds",
+            data_root="/data",
+            mode="STRICT",
+            listdir=listdir,
+            isdir=isdir,
+            isfile=isfile,
+        )
+        is None
+    )
     assert resolve_texture_path(
         "textures/foo/bar.dds",
         data_root="/data",
         mode="STRICT",
-        listdir=listdir, isdir=isdir, isfile=isfile,
+        listdir=listdir,
+        isdir=isdir,
+        isfile=isfile,
     ) == Path("/data/textures/foo/bar.dds")
 
 
@@ -118,7 +139,9 @@ def test_resolve_texture_path_case_insensitive_walks_components() -> None:
         "Textures\\FOO\\BAR.dds",
         data_root="/data",
         mode="CASE_INSENSITIVE",
-        listdir=listdir, isdir=isdir, isfile=isfile,
+        listdir=listdir,
+        isdir=isdir,
+        isfile=isfile,
     )
     assert hit == Path("/data/textures/foo/bar.dds")
 
@@ -126,12 +149,17 @@ def test_resolve_texture_path_case_insensitive_walks_components() -> None:
 def test_resolve_texture_path_case_insensitive_missing_returns_none() -> None:
     fs = {"/data": True, "/data/textures": True}
     listdir, isdir, isfile = _build_fake_fs(fs)
-    assert resolve_texture_path(
-        "textures/foo/bar.dds",
-        data_root="/data",
-        mode="CASE_INSENSITIVE",
-        listdir=listdir, isdir=isdir, isfile=isfile,
-    ) is None
+    assert (
+        resolve_texture_path(
+            "textures/foo/bar.dds",
+            data_root="/data",
+            mode="CASE_INSENSITIVE",
+            listdir=listdir,
+            isdir=isdir,
+            isfile=isfile,
+        )
+        is None
+    )
 
 
 def test_resolve_texture_path_loosen_root_first_hit_wins() -> None:
@@ -148,7 +176,9 @@ def test_resolve_texture_path_loosen_root_first_hit_wins() -> None:
         data_root="/skyrim",
         mode="FUZZY_LOOSEN_ROOT",
         extra_roots=["/mods"],
-        listdir=listdir, isdir=isdir, isfile=isfile,
+        listdir=listdir,
+        isdir=isdir,
+        isfile=isfile,
     )
     assert hit == Path("/mods/textures/foo.dds")
 
@@ -160,7 +190,9 @@ def test_resolve_texture_path_loosen_root_no_extras_falls_back_to_data_root() ->
         "textures/foo.dds",
         data_root="/skyrim",
         mode="FUZZY_LOOSEN_ROOT",
-        listdir=listdir, isdir=isdir, isfile=isfile,
+        listdir=listdir,
+        isdir=isdir,
+        isfile=isfile,
     )
     assert hit == Path("/skyrim/textures/foo.dds")
 
@@ -191,9 +223,103 @@ def test_resolve_texture_path_strips_leading_data_prefix() -> None:
         "Data\\textures\\foo.dds",
         data_root="/skyrim",
         mode="CASE_INSENSITIVE",
-        listdir=listdir, isdir=isdir, isfile=isfile,
+        listdir=listdir,
+        isdir=isdir,
+        isfile=isfile,
     )
     assert hit == Path("/skyrim/textures/foo.dds")
+
+
+# ---------------------------------------------------------------------------
+# is_path_within / path-traversal containment (CWE-22)
+# ---------------------------------------------------------------------------
+
+
+def test_is_path_within_true_for_nested_path(tmp_path: Path) -> None:
+    root = tmp_path / "data"
+    nested = root / "textures" / "foo.dds"
+    assert is_path_within(nested, root) is True
+
+
+def test_is_path_within_true_for_root_itself(tmp_path: Path) -> None:
+    assert is_path_within(tmp_path, tmp_path) is True
+
+
+def test_is_path_within_false_for_sibling_escape(tmp_path: Path) -> None:
+    root = tmp_path / "data"
+    escaped = tmp_path / "secret.dds"
+    assert is_path_within(escaped, root) is False
+
+
+def test_is_path_within_false_for_dotdot_escape(tmp_path: Path) -> None:
+    root = tmp_path / "data"
+    escaped = root / ".." / "secret.dds"
+    assert is_path_within(escaped, root) is False
+
+
+def test_resolve_texture_path_strict_rejects_traversal_escape(tmp_path: Path) -> None:
+    root = tmp_path / "data"
+    (root / "textures").mkdir(parents=True)
+    secret = tmp_path / "secret.dds"
+    secret.write_bytes(b"private")
+    assert (
+        resolve_texture_path(
+            "../secret.dds",
+            data_root=root,
+            mode="STRICT",
+        )
+        is None
+    )
+
+
+def test_resolve_texture_path_case_insensitive_rejects_traversal_escape(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "data"
+    (root / "textures").mkdir(parents=True)
+    secret = tmp_path / "secret.dds"
+    secret.write_bytes(b"private")
+    assert (
+        resolve_texture_path(
+            "..\\secret.dds",
+            data_root=root,
+            mode="CASE_INSENSITIVE",
+        )
+        is None
+    )
+
+
+def test_resolve_texture_path_fuzzy_rejects_traversal_escape(tmp_path: Path) -> None:
+    root = tmp_path / "data"
+    extra = tmp_path / "mods"
+    (root / "textures").mkdir(parents=True)
+    (extra / "textures").mkdir(parents=True)
+    secret = tmp_path / "secret.dds"
+    secret.write_bytes(b"private")
+    assert (
+        resolve_texture_path(
+            "../secret.dds",
+            data_root=root,
+            mode="FUZZY_LOOSEN_ROOT",
+            extra_roots=[extra],
+        )
+        is None
+    )
+
+
+def test_resolve_texture_path_rejects_drive_absolute_override(tmp_path: Path) -> None:
+    # A crafted path that looks drive-absolute must not hijack the
+    # `root / Path(...)` join and silently resolve outside the root.
+    root = tmp_path / "data"
+    (root / "textures").mkdir(parents=True)
+    assert (
+        resolve_texture_path(
+            "C:\\Windows\\win.ini",
+            data_root=root,
+            mode="STRICT",
+        )
+        is None
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -203,22 +329,28 @@ def test_resolve_texture_path_strips_leading_data_prefix() -> None:
 
 def test_relative_to_data_root_basic() -> None:
     rel = relative_to_data_root(
-        "/skyrim/data/textures/foo.dds", "/skyrim/data",
+        "/skyrim/data/textures/foo.dds",
+        "/skyrim/data",
     )
     assert rel == "textures/foo.dds"
 
 
 def test_relative_to_data_root_case_insensitive() -> None:
     rel = relative_to_data_root(
-        "/Skyrim/Data/Textures/Foo.dds", "/skyrim/data",
+        "/Skyrim/Data/Textures/Foo.dds",
+        "/skyrim/data",
     )
     assert rel == "Textures/Foo.dds"
 
 
 def test_relative_to_data_root_outside_returns_none() -> None:
-    assert relative_to_data_root(
-        "/elsewhere/foo.dds", "/skyrim/data",
-    ) is None
+    assert (
+        relative_to_data_root(
+            "/elsewhere/foo.dds",
+            "/skyrim/data",
+        )
+        is None
+    )
 
 
 def test_relative_to_data_root_empty_inputs() -> None:
@@ -245,16 +377,18 @@ def test_audit_image_paths_resolves_relative_and_absolute() -> None:
     }
     listdir, isdir, isfile = _build_fake_fs(fs)
     images = [
-        ("foo", "textures/foo.dds"),                # NIF-relative
-        ("bar", "/skyrim/textures/bar.dds"),         # absolute, under root
-        ("missing", "textures/never.dds"),           # miss
-        ("blank", ""),                               # empty filepath
+        ("foo", "textures/foo.dds"),  # NIF-relative
+        ("bar", "/skyrim/textures/bar.dds"),  # absolute, under root
+        ("missing", "textures/never.dds"),  # miss
+        ("blank", ""),  # empty filepath
     ]
     results = audit_image_paths(
         images,
         data_root="/skyrim",
         mode="CASE_INSENSITIVE",
-        listdir=listdir, isdir=isdir, isfile=isfile,
+        listdir=listdir,
+        isdir=isdir,
+        isfile=isfile,
     )
     assert len(results) == 4
     assert results[0].found and Path(results[0].resolved) == Path("/skyrim/textures/foo.dds")
@@ -265,7 +399,8 @@ def test_audit_image_paths_resolves_relative_and_absolute() -> None:
 
 def test_audit_image_paths_returns_dataclass_entries() -> None:
     out = audit_image_paths(
-        [("x", "")], data_root="/x",
+        [("x", "")],
+        data_root="/x",
     )
     assert isinstance(out[0], TextureAuditEntry)
     assert out[0].image_name == "x"

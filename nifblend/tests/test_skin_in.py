@@ -12,6 +12,7 @@ from nifblend.bridge.skin_in import (
     apply_skin_to_object,
     bstrishape_skin_to_skin_data,
     niskin_to_skin_data,
+    skin_data_from_vertex_groups,
 )
 from nifblend.format.generated.blocks import (
     BSDismemberSkinInstance,
@@ -43,9 +44,7 @@ def _named_node(name_idx: int) -> NiNode:
 def _bone_data(weights: list[tuple[int, float]]) -> NifBoneData:
     bd = NifBoneData()
     bd.num_vertices = len(weights)
-    bd.vertex_weights = [
-        BoneVertData(index=int(i), weight=float(w)) for i, w in weights
-    ]
+    bd.vertex_weights = [BoneVertData(index=int(i), weight=float(w)) for i, w in weights]
     return bd
 
 
@@ -61,10 +60,7 @@ def _table(blocks: list[Any], names: list[str]) -> SimpleNamespace:
     return SimpleNamespace(
         blocks=blocks,
         header=SimpleNamespace(
-            strings=[
-                SizedString(length=len(s), value=list(s.encode("latin-1")))
-                for s in names
-            ],
+            strings=[SizedString(length=len(s), value=list(s.encode("latin-1"))) for s in names],
         ),
     )
 
@@ -77,17 +73,15 @@ def test_niskin_decodes_per_bone_weights_into_flat_arrays() -> None:
     bone_b = _named_node(1)
     skin_data = _skin_data(
         [
-            [(0, 1.0), (1, 0.5)],     # bone 0 -> v0 (full), v1 (half)
-            [(1, 0.5), (2, 1.0)],     # bone 1 -> v1 (half), v2 (full)
+            [(0, 1.0), (1, 0.5)],  # bone 0 -> v0 (full), v1 (half)
+            [(1, 0.5), (2, 1.0)],  # bone 1 -> v1 (half), v2 (full)
         ]
     )
     skin_inst = NiSkinInstance()
     skin_inst.data = 3
     skin_inst.bones = [0, 1]
     skin_inst.num_bones = 2
-    table = _table(
-        [bone_a, bone_b, SimpleNamespace(), skin_data], ["BoneA", "BoneB"]
-    )
+    table = _table([bone_a, bone_b, SimpleNamespace(), skin_data], ["BoneA", "BoneB"])
     table.blocks.append(skin_inst)
     inst_idx = len(table.blocks) - 1
 
@@ -327,3 +321,116 @@ def test_niskin_decode_and_apply_round_trip_into_vertex_groups() -> None:
         ([1], 0.5, "REPLACE"),
         ([2], 1.0, "REPLACE"),
     ]
+
+
+# ---- skin_data_from_vertex_groups (Phase 5 step 16, export direction) ----
+
+
+class _FakeExportVertexGroup:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class _FakeGroupElement:
+    def __init__(self, group: int, weight: float) -> None:
+        self.group = group
+        self.weight = weight
+
+
+class _FakeVertex:
+    def __init__(self, index: int, groups: list[_FakeGroupElement]) -> None:
+        self.index = index
+        self.groups = groups
+
+
+class _FakeExportObject:
+    def __init__(self, vertex_group_names: list[str], vertices: list[_FakeVertex]) -> None:
+        self.vertex_groups = [_FakeExportVertexGroup(n) for n in vertex_group_names]
+        self.data = SimpleNamespace(vertices=vertices)
+
+
+def test_skin_data_from_vertex_groups_harvests_named_groups_only() -> None:
+    obj = _FakeExportObject(
+        vertex_group_names=["BoneA", "BoneB", "NotABone"],
+        vertices=[
+            _FakeVertex(0, [_FakeGroupElement(0, 1.0)]),
+            _FakeVertex(1, [_FakeGroupElement(0, 0.5), _FakeGroupElement(1, 0.5)]),
+            _FakeVertex(2, [_FakeGroupElement(2, 1.0)]),  # "NotABone" -- excluded
+        ],
+    )
+
+    skin = skin_data_from_vertex_groups(obj, ["BoneA", "BoneB"])
+
+    assert skin.bone_names == ["BoneA", "BoneB"]
+    triples = {
+        (int(v), int(b), round(float(w), 5))
+        for v, b, w in zip(skin.vertex_indices, skin.bone_indices, skin.weights, strict=True)
+    }
+    assert triples == {(0, 0, 1.0), (1, 0, 0.5), (1, 1, 0.5)}
+
+
+def test_skin_data_from_vertex_groups_drops_zero_and_negative_weights() -> None:
+    obj = _FakeExportObject(
+        vertex_group_names=["BoneA"],
+        vertices=[
+            _FakeVertex(0, [_FakeGroupElement(0, 0.0)]),
+            _FakeVertex(1, [_FakeGroupElement(0, -0.1)]),
+            _FakeVertex(2, [_FakeGroupElement(0, 1.0)]),
+        ],
+    )
+    skin = skin_data_from_vertex_groups(obj, ["BoneA"])
+    assert skin.vertex_indices.tolist() == [2]
+    assert skin.weights.tolist() == [1.0]
+
+
+def test_skin_data_from_vertex_groups_empty_when_no_bone_names_match() -> None:
+    obj = _FakeExportObject(
+        vertex_group_names=["Unrelated"],
+        vertices=[_FakeVertex(0, [_FakeGroupElement(0, 1.0)])],
+    )
+    skin = skin_data_from_vertex_groups(obj, ["BoneA"])
+    assert skin.bone_names == ["BoneA"]
+    assert skin.vertex_indices.size == 0
+
+
+def test_skin_data_from_vertex_groups_round_trips_through_apply() -> None:
+    """apply_skin_to_object -> skin_data_from_vertex_groups should recover
+    the same (vertex, bone, weight) triples that were applied."""
+    original = SkinData(
+        bone_names=["BoneA", "BoneB"],
+        vertex_indices=np.array([0, 1, 2], dtype=np.uint32),
+        bone_indices=np.array([0, 0, 1], dtype=np.uint32),
+        weights=np.array([1.0, 0.5, 1.0], dtype=np.float32),
+    )
+    obj = _FakeObject()
+    apply_skin_to_object(original, obj)
+
+    # Adapt the apply-side fake into the shape skin_data_from_vertex_groups
+    # expects (obj.data.vertices with per-vertex .groups).
+    vg_names = [vg.name for vg in obj.vertex_groups.created]
+    name_to_index = {n: i for i, n in enumerate(vg_names)}
+    per_vertex: dict[int, list[_FakeGroupElement]] = {}
+    for vg in obj.vertex_groups.created:
+        gi = name_to_index[vg.name]
+        for indices, weight, _mode in vg.calls:
+            for vi in indices:
+                per_vertex.setdefault(vi, []).append(_FakeGroupElement(gi, weight))
+    export_obj = _FakeExportObject(
+        vertex_group_names=vg_names,
+        vertices=[_FakeVertex(vi, groups) for vi, groups in sorted(per_vertex.items())],
+    )
+
+    recovered = skin_data_from_vertex_groups(export_obj, vg_names)
+    original_set = {
+        (int(v), int(b), round(float(w), 5))
+        for v, b, w in zip(
+            original.vertex_indices, original.bone_indices, original.weights, strict=True
+        )
+    }
+    recovered_set = {
+        (int(v), int(b), round(float(w), 5))
+        for v, b, w in zip(
+            recovered.vertex_indices, recovered.bone_indices, recovered.weights, strict=True
+        )
+    }
+    assert recovered_set == original_set

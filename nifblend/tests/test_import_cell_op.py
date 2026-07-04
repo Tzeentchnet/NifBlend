@@ -98,18 +98,14 @@ def _write_cell_csv(path: Path, model_relpath: str, rows: int) -> None:
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def _patch_parse_and_decode(
-    monkeypatch: pytest.MonkeyPatch, full_path: Path
-) -> list[_FakeMesh]:
+def _patch_parse_and_decode(monkeypatch: pytest.MonkeyPatch, full_path: Path) -> list[_FakeMesh]:
     """Return a list that records every mesh datablock the bridge produced."""
     produced: list[_FakeMesh] = []
 
     fake_mesh_data = object()  # opaque marker -- bridge stub returns a fresh _FakeMesh
 
     def _fake_parse_many(paths: list[Path], *, max_workers: int | None = None):
-        return [
-            BatchFileResult(path=Path(p), meshes=[fake_mesh_data]) for p in paths
-        ]
+        return [BatchFileResult(path=Path(p), meshes=[fake_mesh_data]) for p in paths]
 
     def _fake_mesh_data_to_blender(_mdata: Any) -> _FakeMesh:
         m = _FakeMesh(full_path.stem)
@@ -117,9 +113,7 @@ def _patch_parse_and_decode(
         return m
 
     monkeypatch.setattr(import_cell_mod, "parse_and_decode_many", _fake_parse_many)
-    monkeypatch.setattr(
-        import_cell_mod, "mesh_data_to_blender", _fake_mesh_data_to_blender
-    )
+    monkeypatch.setattr(import_cell_mod, "mesh_data_to_blender", _fake_mesh_data_to_blender)
     return produced
 
 
@@ -250,6 +244,39 @@ def test_missing_mesh_root_returns_cancelled(
     _write_cell_csv(csv_path, "ghost.nif", rows=3)
 
     _patch_parse_and_decode(monkeypatch, mesh_root / "ghost.nif")
+
+    op = NIFBLEND_OT_import_cell()
+    op.filepath = str(csv_path)
+    op.mesh_root = str(mesh_root)
+    op.normalize_location = False
+    op.instance_duplicates = True
+    op.exclude_prefixes = ""
+    op.worker_count = 0
+    op.report = lambda *_a, **_kw: None
+    assert op.execute(_ctx()) == {"CANCELLED"}
+    assert fake_bpy.objects == []
+
+
+def test_traversal_model_path_is_rejected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_bpy: SimpleNamespace,
+) -> None:
+    """A `model` column that escapes ``mesh_root`` via ``..`` must not resolve.
+
+    CWE-22 regression test: without the containment check, ``mesh_root /
+    "../secret.nif"`` would resolve to a real file sitting just outside
+    the configured mesh root and the importer would happily parse it.
+    """
+    mesh_root = tmp_path / "Meshes"
+    mesh_root.mkdir()
+    secret = tmp_path / "secret.nif"
+    secret.write_bytes(b"\x00")  # exists on disk, but outside mesh_root
+
+    csv_path = tmp_path / "cell.csv"
+    _write_cell_csv(csv_path, "../secret.nif", rows=1)
+
+    _patch_parse_and_decode(monkeypatch, secret)
 
     op = NIFBLEND_OT_import_cell()
     op.filepath = str(csv_path)

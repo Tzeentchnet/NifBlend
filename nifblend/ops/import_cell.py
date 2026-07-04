@@ -26,6 +26,7 @@ from nifblend.bridge.cell_csv import (
     should_skip,
 )
 from nifblend.bridge.mesh_in import mesh_data_to_blender
+from nifblend.bridge.textures import is_path_within
 from nifblend.ops.import_batch import parse_and_decode_many
 
 __all__ = ["NIFBLEND_OT_import_cell"]
@@ -90,9 +91,13 @@ class NIFBLEND_OT_import_cell(Operator, ImportHelper):
         unique_relpaths = sorted({p.model_path for p in kept})
         full_paths: dict[str, Path] = {}
         missing: list[str] = []
+        mesh_root = Path(self.mesh_root)
         for rel in unique_relpaths:
-            full = Path(self.mesh_root) / rel.replace("/", os.sep)
-            if full.exists():
+            full = mesh_root / rel.replace("/", os.sep)
+            # Reject any resolved path that escapes mesh_root (e.g. via a
+            # `..`-laden or drive-absolute `model` column in a crafted CSV)
+            # before ever touching the filesystem.
+            if is_path_within(full, mesh_root) and full.exists():
                 full_paths[rel] = full
             else:
                 missing.append(rel)
@@ -100,8 +105,7 @@ class NIFBLEND_OT_import_cell(Operator, ImportHelper):
         if not full_paths:
             self.report(
                 {"ERROR"},
-                f"No referenced NIFs exist under {self.mesh_root!r} "
-                f"({len(missing)} missing)",
+                f"No referenced NIFs exist under {self.mesh_root!r} ({len(missing)} missing)",
             )
             return {"CANCELLED"}
 
@@ -169,7 +173,9 @@ class NIFBLEND_OT_import_cell(Operator, ImportHelper):
                 placed += 1
 
         if missing:
-            self.report({"WARNING"}, f"{len(missing)} referenced NIF(s) missing under {self.mesh_root!r}")
+            self.report(
+                {"WARNING"}, f"{len(missing)} referenced NIF(s) missing under {self.mesh_root!r}"
+            )
         if decode_errors:
             self.report({"WARNING"}, f"{len(decode_errors)} NIF(s) failed to decode")
         if skipped_prefix:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pytest
@@ -28,6 +29,7 @@ from nifblend.format.generated.blocks import (
     NiSkinPartition,
 )
 from nifblend.format.generated.structs import (
+    Matrix33,
     SizedString,
     Vector3,
 )
@@ -175,29 +177,38 @@ def test_invalid_limits_raise() -> None:
     skin = _skin(["a"], [(0, 0, 1.0)])
     with pytest.raises(ValueError, match="num_vertices must be positive"):
         build_skin_partitions(
-            skin, triangles=[[0, 0, 0]], num_vertices=0,
+            skin,
+            triangles=[[0, 0, 0]],
+            num_vertices=0,
             limits=BoneLimits(max_bones_per_partition=4, max_weights_per_vertex=4),
         )
     with pytest.raises(ValueError, match="max_bones_per_partition"):
         build_skin_partitions(
-            skin, triangles=[[0, 0, 0]], num_vertices=1,
+            skin,
+            triangles=[[0, 0, 0]],
+            num_vertices=1,
             limits=BoneLimits(max_bones_per_partition=0, max_weights_per_vertex=4),
         )
     with pytest.raises(ValueError, match="max_weights_per_vertex"):
         build_skin_partitions(
-            skin, triangles=[[0, 0, 0]], num_vertices=1,
+            skin,
+            triangles=[[0, 0, 0]],
+            num_vertices=1,
             limits=BoneLimits(max_bones_per_partition=4, max_weights_per_vertex=0),
         )
 
 
 def test_empty_triangles_returns_empty_list() -> None:
     skin = _skin([], [])
-    assert build_skin_partitions(
-        skin,
-        triangles=np.empty((0, 3), dtype=np.uint16),
-        num_vertices=1,
-        limits=BoneLimits(max_bones_per_partition=4, max_weights_per_vertex=4),
-    ) == []
+    assert (
+        build_skin_partitions(
+            skin,
+            triangles=np.empty((0, 3), dtype=np.uint16),
+            num_vertices=1,
+            limits=BoneLimits(max_bones_per_partition=4, max_weights_per_vertex=4),
+        )
+        == []
+    )
 
 
 # ---- per-vertex influence pruning + renormalisation ----------------------
@@ -285,10 +296,7 @@ def _table(blocks: list, names: list[str]) -> SimpleNamespace:
     return SimpleNamespace(
         blocks=blocks,
         header=SimpleNamespace(
-            strings=[
-                SizedString(length=len(s), value=list(s.encode("latin-1")))
-                for s in names
-            ],
+            strings=[SizedString(length=len(s), value=list(s.encode("latin-1"))) for s in names],
         ),
     )
 
@@ -360,8 +368,12 @@ def test_build_ni_skin_instance_default_refs_are_null() -> None:
 def test_build_ni_skin_instance_dismember_variant() -> None:
     skin = _skin(["a"], [])
     inst = build_ni_skin_instance(
-        skin, data_ref=1, partition_ref=2, skeleton_root_ref=0,
-        bone_block_refs=[5], dismember=True,
+        skin,
+        data_ref=1,
+        partition_ref=2,
+        skeleton_root_ref=0,
+        bone_block_refs=[5],
+        dismember=True,
     )
     assert isinstance(inst, BSDismemberSkinInstance)
     assert inst.data == 1
@@ -450,3 +462,125 @@ def test_partitions_round_trip_through_sse_per_vertex_decoder() -> None:
         (3, 2, 1.0),
     }
     assert decoded_set == expected_set
+
+
+# ---- matrix_to_translation_rotation_scale / build_ninode_tree (Phase 5) --
+
+
+def test_matrix_to_trs_round_trips_through_armature_in_decomposition() -> None:
+    """Inverse of node_local_matrix: build a matrix from known TRS, decompose
+    back, and confirm the round-trip recovers the inputs."""
+    from nifblend.bridge.armature_in import node_local_matrix
+    from nifblend.bridge.armature_out import matrix_to_translation_rotation_scale
+
+    src = SimpleNamespace(
+        translation=Vector3(1.0, 2.0, 3.0),
+        rotation=Matrix33(
+            m11=1.0,
+            m12=0.0,
+            m13=0.0,
+            m21=0.0,
+            m22=1.0,
+            m23=0.0,
+            m31=0.0,
+            m32=0.0,
+            m33=1.0,
+        ),
+        scale=2.5,
+    )
+    matrix = node_local_matrix(src)
+    translation, rotation, scale = matrix_to_translation_rotation_scale(matrix)
+    assert (translation.x, translation.y, translation.z) == pytest.approx((1.0, 2.0, 3.0))
+    assert scale == pytest.approx(2.5)
+    np.testing.assert_allclose(
+        [
+            [rotation.m11, rotation.m12, rotation.m13],
+            [rotation.m21, rotation.m22, rotation.m23],
+            [rotation.m31, rotation.m32, rotation.m33],
+        ],
+        np.eye(3),
+        atol=1e-5,
+    )
+
+
+def test_matrix_to_trs_identity() -> None:
+    from nifblend.bridge.armature_out import matrix_to_translation_rotation_scale
+
+    translation, rotation, scale = matrix_to_translation_rotation_scale(np.eye(4, dtype=np.float32))
+    assert (translation.x, translation.y, translation.z) == (0.0, 0.0, 0.0)
+    assert scale == pytest.approx(1.0)
+    assert rotation.m11 == pytest.approx(1.0)
+    assert rotation.m22 == pytest.approx(1.0)
+    assert rotation.m33 == pytest.approx(1.0)
+
+
+class _FakeBindMatrixBone:
+    def __init__(self, name: str, matrix: np.ndarray, parent: Any = None) -> None:
+        self.name = name
+        self.parent = parent
+        self.children: list[_FakeBindMatrixBone] = []
+        self.nifblend = SimpleNamespace(
+            has_bind_matrix=True, bind_matrix=tuple(matrix.reshape(-1).tolist())
+        )
+
+
+def test_build_ninode_tree_single_root() -> None:
+    from nifblend.bridge.armature_out import build_ninode_tree
+
+    root = _FakeBindMatrixBone("Root", np.eye(4, dtype=np.float32))
+    armature_obj = SimpleNamespace(data=SimpleNamespace(bones=[root]))
+
+    built = build_ninode_tree(armature_obj)
+
+    assert len(built) == 1
+    assert built[0].name == "Root"
+    assert built[0].parent_index == -1
+    assert built[0].block.children == []
+
+
+def test_build_ninode_tree_parent_child_order_and_children_refs() -> None:
+    from nifblend.bridge.armature_out import build_ninode_tree
+
+    m = np.eye(4, dtype=np.float32)
+    root = _FakeBindMatrixBone("Root", m)
+    child = _FakeBindMatrixBone("Child", m, parent=root)
+    root.children = [child]
+    armature_obj = SimpleNamespace(data=SimpleNamespace(bones=[root, child]))
+
+    built = build_ninode_tree(armature_obj)
+
+    assert [b.name for b in built] == ["Root", "Child"]
+    assert built[0].parent_index == -1
+    assert built[1].parent_index == 0
+    # Root's block.children holds a *local* index (0-based into `built`)
+    # pointing at Child.
+    assert built[0].block.children == [1]
+
+
+def test_build_ninode_tree_falls_back_to_identity_when_unstamped() -> None:
+    from nifblend.bridge.armature_out import build_ninode_tree
+
+    bone = SimpleNamespace(name="Unstamped", parent=None, children=[])
+    armature_obj = SimpleNamespace(data=SimpleNamespace(bones=[bone]))
+
+    built = build_ninode_tree(armature_obj)
+
+    assert len(built) == 1
+    assert built[0].block.scale == pytest.approx(1.0)
+    assert built[0].block.translation.x == pytest.approx(0.0)
+
+
+def test_build_ninode_tree_preserves_translation_and_scale() -> None:
+    from nifblend.bridge.armature_out import build_ninode_tree
+
+    m = np.eye(4, dtype=np.float32)
+    m[0, 3] = 5.0
+    m[:3, :3] *= 2.0
+    bone = _FakeBindMatrixBone("Bone", m)
+    armature_obj = SimpleNamespace(data=SimpleNamespace(bones=[bone]))
+
+    built = build_ninode_tree(armature_obj)
+
+    node = built[0].block
+    assert node.translation.x == pytest.approx(5.0)
+    assert node.scale == pytest.approx(2.0)

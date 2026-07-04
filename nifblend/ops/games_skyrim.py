@@ -64,20 +64,42 @@ def _convert_selected(
         apply_profile_to_object(
             obj,
             profile=target_profile,
-            nif_version=int(getattr(obj.nifblend, "nif_version", 0)) if hasattr(obj, "nifblend") else 0,
-            user_version=int(getattr(obj.nifblend, "user_version", 0)) if hasattr(obj, "nifblend") else 0,
+            nif_version=int(getattr(obj.nifblend, "nif_version", 0))
+            if hasattr(obj, "nifblend")
+            else 0,
+            user_version=int(getattr(obj.nifblend, "user_version", 0))
+            if hasattr(obj, "nifblend")
+            else 0,
             bs_version=100 if target_profile == GameProfile.SKYRIM_SE else 83,
-            source_path=str(getattr(obj.nifblend, "source_path", "")) if hasattr(obj, "nifblend") else "",
-            block_origin=str(getattr(obj.nifblend, "block_origin", "")) if hasattr(obj, "nifblend") else "",
+            source_path=str(getattr(obj.nifblend, "source_path", ""))
+            if hasattr(obj, "nifblend")
+            else "",
+            block_origin=str(getattr(obj.nifblend, "block_origin", ""))
+            if hasattr(obj, "nifblend")
+            else "",
         )
     return mats_touched, objs_touched
 
 
 class NIFBLEND_OT_skyrim_le_to_se(Operator):
-    """Convert selected Skyrim LE materials/objects to Skyrim SE."""
+    """Convert selected Skyrim LE materials/objects to Skyrim SE.
+
+    Re-stamps ``bs_version`` (83 -> 100) on every selected object. Note:
+    ``_LE_TO_SE_BIT_MOVES`` in ``nifblend.bridge.games.skyrim`` is
+    currently empty -- LE and SE share the same
+    SkyrimShaderPropertyFlags1/2 bit layout for every flag the codegen
+    emits today, so no shader-flag bits actually move; this operator is
+    presently equivalent to a bs_version restamp only. Populate that
+    table if/when a real discrepancy is found against vanilla files.
+    """
 
     bl_idname = "nifblend.skyrim_le_to_se"
     bl_label = "Convert LE → SE"
+    bl_description = (
+        "Restamp selected objects/materials to Skyrim SE. Shader-flag bit "
+        "layout is currently identical between LE and SE, so only "
+        "bs_version changes (83 -> 100)"
+    )
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -96,10 +118,19 @@ class NIFBLEND_OT_skyrim_le_to_se(Operator):
 
 
 class NIFBLEND_OT_skyrim_se_to_le(Operator):
-    """Convert selected Skyrim SE materials/objects back to Skyrim LE."""
+    """Convert selected Skyrim SE materials/objects back to Skyrim LE.
+
+    See :class:`NIFBLEND_OT_skyrim_le_to_se` -- currently a ``bs_version``
+    restamp only (100 -> 83); no shader-flag bits move today.
+    """
 
     bl_idname = "nifblend.skyrim_se_to_le"
     bl_label = "Convert SE → LE"
+    bl_description = (
+        "Restamp selected objects/materials to Skyrim LE. Shader-flag bit "
+        "layout is currently identical between LE and SE, so only "
+        "bs_version changes (100 -> 83)"
+    )
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod

@@ -21,6 +21,7 @@ from .bridge import (
 from .ops import (
     cleanup,
     export_batch,
+    export_kf,
     export_nif,
     export_xedit_pas,
     games_fallout,
@@ -50,6 +51,7 @@ _CLASSES: tuple[type, ...] = (
     import_batch.NIFBLEND_OT_import_batch,
     import_cell.NIFBLEND_OT_import_cell,
     export_nif.NIFBLEND_OT_export_nif,
+    export_kf.NIFBLEND_OT_export_kf,
     export_batch.NIFBLEND_OT_export_batch,
     export_xedit_pas.NIFBLEND_OT_export_xedit_pas,
     # Cleanup + utility operators (Phase 8c + 8h).
@@ -119,6 +121,10 @@ def _menu_func_export(self: bpy.types.Menu, _context: bpy.types.Context) -> None
     self.layout.operator(
         export_nif.NIFBLEND_OT_export_nif.bl_idname,
         text="NIF (NifBlend) (.nif)",
+    )
+    self.layout.operator(
+        export_kf.NIFBLEND_OT_export_kf.bl_idname,
+        text="KF Animation (NifBlend) (.kf)",
     )
     self.layout.operator(
         export_batch.NIFBLEND_OT_export_batch.bl_idname,

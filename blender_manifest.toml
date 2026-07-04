@@ -22,17 +22,18 @@ tags = ["Import-Export"]
 wheels = []
 
 [permissions]
-files = "Read/write NIF, KF, and texture files referenced by the user."
+files = "Read/write NIF, KF, and texture files referenced by the user"
 
 [build]
+# NOTE: Blender's extension builder requires this manifest to sit directly
+# alongside `__init__.py`, so the actual build source directory is a staged
+# copy of `nifblend/` (see `scripts/build_extension.py`), not the repo root.
+# Do NOT add "/scripts/" here: `nifblend/scripts/` ships `blender_export.pas`,
+# a runtime resource loaded via `importlib.resources` by the xEdit PAS export
+# operator, and would be silently excluded from the shipped package.
 paths_exclude_pattern = [
     "__pycache__/",
-    "/.git/",
-    "/.github/",
     "/tests/",
-    "/scripts/",
-    "/docs/",
-    "/.venv/",
     "*.pyc",
     ".mypy_cache/",
     ".ruff_cache/",

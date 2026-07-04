@@ -74,21 +74,22 @@ Scope: **export only**. NLA blending semantics beyond first-active-strip per tra
 #### 10f. `NIFBLEND_OT_export_kf` operator
 *Depends on 10e.*
 
-- [ ] New `nifblend/ops/export_kf.py`: `NIFBLEND_OT_export_kf(Operator, ExportHelper)`, `bl_idname="nifblend.export_kf"`, `bl_label="Export KF"`, `filename_ext=".kf"`, `filter_glob="*.kf"`. Properties:
+- [x] New `nifblend/ops/export_kf.py`: `NIFBLEND_OT_export_kf(Operator, ExportHelper)`, `bl_idname="nifblend.export_kf"`, `bl_label="Export KF"`, `filename_ext=".kf"`, `filter_glob="*.kf"`. Properties:
   - `target_armature: EnumProperty` (dynamic, all `ARMATURE` objects in scene; sentinel when empty — mirror Phase 5.21 import-side picker).
-  - `actions_mode: EnumProperty` over `("ACTIVE", "ALL_FROM_ARMATURE", "SELECTED_NLA_TRACKS")`, default `"ACTIVE"`.
+  - `actions_mode: EnumProperty` over `("ACTIVE", "ALL_FROM_ARMATURE")`, default `"ACTIVE"`. `SELECTED_NLA_TRACKS` was not implemented — deferred, no NLA-strip enumeration exists yet (tracked as a "Beyond v1.1" follow-on below).
   - `version_preset: EnumProperty` over `("AUTO", "SKYRIM_SE", "SKYRIM_LE", "FALLOUT_4")` mapping to `(version, user_version, bs_version)` triplets — pull from `NifBlendObjectProperties.game_profile` stamp on the target armature when `AUTO`.
   - `fps: FloatProperty` (default 30.0).
-- [ ] `execute`: resolve target armature → enumerate actions per `actions_mode` → for each call `animation_data_from_blender` → orchestrate through `assemble_kf_block_table` → `write_nif`. Per-action failure surfaces as `WARNING`; total failure cancels with `ERROR`.
-- [ ] Wire into [`nifblend/__init__.py`](../nifblend/__init__.py)'s `_CLASSES` + `_menu_func_export` (`File → Export → KF Animation (NifBlend) (.kf)`).
-- [ ] Test suite `nifblend/tests/test_export_kf_op.py` (~8 tests): target-armature picker (explicit / active fallback / non-armature reject), action enumeration modes, version-preset → header triplet mapping, `execute` happy path against in-memory fake `bpy`, **end-to-end import → edit → export → re-import** round-trip exercising the full operator pair.
+- [x] `execute`: resolve target armature → enumerate actions per `actions_mode` → for each call `animation_data_from_blender` → orchestrate through `assemble_kf_block_table` → `write_nif`. Per-action failure surfaces as `WARNING`; total failure cancels with `ERROR`.
+- [x] Wire into [`nifblend/__init__.py`](../nifblend/__init__.py)'s `_CLASSES` + `_menu_func_export` (`File → Export → KF Animation (NifBlend) (.kf)`). Landed as part of the 2026-07 review pass ([`docs/REVIEW_2026-07.md`](REVIEW_2026-07.md) finding 3) — the operator code had existed since Phase 10e but was never registered.
+- [x] Test suite `nifblend/tests/test_export_kf_op.py` (17 tests): target-armature picker (explicit / active fallback / non-armature reject), preset resolution (explicit override / AUTO-from-profile / unresolvable), action enumeration modes (`ACTIVE` / `ALL_FROM_ARMATURE`), `execute` happy path + error paths against fake `bpy`, and two end-to-end `execute` → `write_nif` → `read_nif` → `is_kf_file`/`kf_root_sequences` round-trips (single action, multi-action). A full cross-operator import→edit→export→re-import test was not added (the existing `test_animation_out.py` end-to-end round-trip already covers the pure bridge path; this suite focuses on the operator wiring itself).
 
 #### 10g. Sidebar UI + ROADMAP / CHANGELOG entries
 *Depends on 10f.*
 
-- [ ] Sidebar: add a `KF Export` action button row under [`NIFBLEND_PT_main`](../nifblend/ui/sidebar.py) (next to the existing `Import KF` row).
-- [ ] Append Phase 10 entry to [`ROADMAP.md`](ROADMAP.md) under `## Phase 10 — KF animation export (v1.1)`; CHANGELOG entries under `## [Unreleased] / ### Added` (one bullet per sub-step matching the dense Phase 9 style).
-- [ ] Tick every 10b-10g checkbox in this file from the matching commits.
+- [x] Sidebar: add a `KF Export` action button row under [`NIFBLEND_PT_main`](../nifblend/ui/sidebar.py) (next to the existing `Import KF` row) — grouped instead with `Export NIF` on the export row (`Export NIF` | `KF`), mirroring the existing `Import NIF` | `KF` row above it.
+- [x] Append Phase 10 entry to [`ROADMAP.md`](ROADMAP.md) under `## Phase 10 — KF animation export (v1.1)`; CHANGELOG entries under `## [Unreleased] / ### Added`.
+- [x] Tick every 10b-10g checkbox in this file from the matching commits.
+
 
 ## Relevant files
 

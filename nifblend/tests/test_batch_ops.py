@@ -205,14 +205,10 @@ def _fake_bpy_for_materialise() -> SimpleNamespace:
 
 
 def test_materialise_creates_one_collection_per_file(nif_folder: Path) -> None:
-    results = parse_and_decode_many(
-        [nif_folder / "a.nif", nif_folder / "b.nif"], max_workers=2
-    )
+    results = parse_and_decode_many([nif_folder / "a.nif", nif_folder / "b.nif"], max_workers=2)
     fake = _fake_bpy_for_materialise()
     # mesh_data_to_blender expects a richer mesh API; stub it out.
-    fake.data.meshes = SimpleNamespace(
-        new=lambda name: _StubMesh(name)
-    )
+    fake.data.meshes = SimpleNamespace(new=lambda name: _StubMesh(name))
     imported, errors = materialise_batch_results(results, bpy=fake)
     assert imported == 2
     assert errors == []
@@ -239,12 +235,16 @@ class _StubMesh:
 
     def __init__(self, name: str) -> None:
         self.name = name
-        self.uv_layers = SimpleNamespace(new=lambda **kw: SimpleNamespace(
-            data=SimpleNamespace(foreach_set=lambda *a, **kw: None)
-        ))
-        self.color_attributes = SimpleNamespace(new=lambda **kw: SimpleNamespace(
-            data=SimpleNamespace(foreach_set=lambda *a, **kw: None)
-        ))
+        self.uv_layers = SimpleNamespace(
+            new=lambda **kw: SimpleNamespace(
+                data=SimpleNamespace(foreach_set=lambda *a, **kw: None)
+            )
+        )
+        self.color_attributes = SimpleNamespace(
+            new=lambda **kw: SimpleNamespace(
+                data=SimpleNamespace(foreach_set=lambda *a, **kw: None)
+            )
+        )
 
     def from_pydata(self, *_a, **_kw) -> None: ...
     def normals_split_custom_set(self, *_a, **_kw) -> None: ...
@@ -305,27 +305,29 @@ def test_write_tables_empty_input_returns_empty_list() -> None:
 
 
 def _make_export_meshdata(name: str) -> SimpleNamespace:
-    """Build a fake ``bpy.types.Mesh`` matching what ``export_bstrishape`` reads.
+    """Build a fake ``bpy.types.Mesh`` matching what ``mesh_data_from_blender`` reads.
 
     The export bridge consumes the mesh through the public ``foreach_get``
     API; rather than mock all of that, we pre-build a real ``MeshData``
     here and substitute the Blender side with a wrapper that returns it.
 
     The simpler and less brittle path: drive ``build_tables`` with a real
-    mesh-shaped object whose ``data`` attribute is the source ``MeshData``
-    converted directly to a ``BSTriShape`` outside the bridge. We rebind
-    the bridge entry point on the local module for the test.
+    mesh-shaped object whose ``data`` attribute is a sentinel carrying the
+    ``MeshData`` directly. We rebind the bridge entry point on the
+    ``export_nif`` module for the test.
     """
     return _PreBuiltMeshData(_triangle(name))
 
 
 class _PreBuiltMeshData:
-    """Carries a MeshData payload that ``export_bstrishape`` won't touch.
+    """Carries a MeshData payload that ``mesh_data_from_blender`` won't touch.
 
-    ``build_tables`` calls ``export_bstrishape(obj.data, name=obj.name)``;
-    we replace ``export_bstrishape`` in the module under test below to
-    pull the payload back out instead of running the full bridge (which
-    would require a real bpy mesh).
+    ``build_tables`` -> ``build_export_table`` calls
+    ``mesh_data_from_blender(obj.data, name=obj.name)``; we replace
+    ``mesh_data_from_blender`` in ``nifblend.ops.export_nif`` (the module
+    ``build_export_table`` looks it up from) below to pull the payload back
+    out instead of running the full bridge (which would require a real bpy
+    mesh).
     """
 
     def __init__(self, mdata: MeshData) -> None:
@@ -333,14 +335,14 @@ class _PreBuiltMeshData:
 
 
 @pytest.fixture(autouse=True)
-def _patch_export_bstrishape(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Route ``export_bstrishape`` through the pre-built MeshData payload."""
+def _patch_mesh_data_from_blender(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Route ``mesh_data_from_blender`` through the pre-built MeshData payload."""
     from nifblend.bridge import mesh_out
-    from nifblend.ops import export_batch
+    from nifblend.ops import export_nif
 
-    def _fake(data: object, *, name: str) -> BSTriShape:
+    def _fake(data: object, *, name: str | None = None) -> MeshData:
         if isinstance(data, _PreBuiltMeshData):
-            return mesh_data_to_bstrishape(data.payload, full_precision=True)
-        return mesh_out.export_bstrishape(data, name=name)
+            return data.payload
+        return mesh_out.mesh_data_from_blender(data, name=name)
 
-    monkeypatch.setattr(export_batch, "export_bstrishape", _fake)
+    monkeypatch.setattr(export_nif, "mesh_data_from_blender", _fake)

@@ -64,6 +64,7 @@ __all__ = [
     "apply_skin_to_object",
     "bstrishape_skin_to_skin_data",
     "niskin_to_skin_data",
+    "skin_data_from_vertex_groups",
 ]
 
 
@@ -97,9 +98,7 @@ class SkinData:
         default_factory=lambda: np.empty(0, dtype=np.uint32)
     )
     #: Per-influence weights, ``(K,)`` float32. Always > 0 after decode.
-    weights: npt.NDArray[np.float32] = field(
-        default_factory=lambda: np.empty(0, dtype=np.float32)
-    )
+    weights: npt.NDArray[np.float32] = field(default_factory=lambda: np.empty(0, dtype=np.float32))
 
 
 # ---- decoders -------------------------------------------------------------
@@ -128,9 +127,7 @@ def niskin_to_skin_data(
     # Per-bone sparse weight lists -> three flat numpy arrays. We size
     # the destination once with the total count to avoid python-level
     # appends during the main loop.
-    per_bone_lengths = [
-        len(getattr(b, "vertex_weights", []) or []) for b in skin_data.bone_list
-    ]
+    per_bone_lengths = [len(getattr(b, "vertex_weights", []) or []) for b in skin_data.bone_list]
     total = int(sum(per_bone_lengths))
     if total == 0:
         return SkinData(bone_names=bone_names)
@@ -190,9 +187,7 @@ def bstrishape_skin_to_skin_data(
     """
     skin_ref = int(getattr(shape, "skin", _NULL_REF))
     skin_inst = _resolve_optional(table, skin_ref)
-    bone_refs = (
-        list(getattr(skin_inst, "bones", []) or []) if skin_inst is not None else []
-    )
+    bone_refs = list(getattr(skin_inst, "bones", []) or []) if skin_inst is not None else []
     bone_names = _resolve_bone_names(table, bone_refs)
 
     vertex_data = list(getattr(shape, "vertex_data", []) or [])
@@ -284,12 +279,54 @@ def apply_skin_to_object(
     return groups
 
 
+def skin_data_from_vertex_groups(obj: Any, bone_names: list[str]) -> SkinData:
+    """Harvest a :class:`SkinData` from ``obj``'s vertex groups (export side).
+
+    Inverse of :func:`apply_skin_to_object`. Only groups whose name is in
+    ``bone_names`` are considered (matching the target armature's bone
+    palette in that exact order -- callers building
+    :class:`~nifblend.bridge.armature_out.PartitionBuild`\\ s or a
+    ``NiSkinInstance`` bone list should pass the same list they use for
+    those so palette indices line up). Reads the same per-vertex
+    ``vertex.groups`` API :func:`apply_skin_to_object` writes through
+    (``vertex_group.add``); zero (or negative) weights are dropped, matching
+    the decode side's convention that a 0.0 weight means "not influenced".
+    """
+    name_to_slot = {name: i for i, name in enumerate(bone_names)}
+    group_index_to_slot: dict[int, int] = {}
+    for i, vg in enumerate(obj.vertex_groups):
+        slot = name_to_slot.get(getattr(vg, "name", None))
+        if slot is not None:
+            group_index_to_slot[i] = slot
+
+    vertex_indices: list[int] = []
+    bone_indices: list[int] = []
+    weights: list[float] = []
+    if group_index_to_slot:
+        for vertex in obj.data.vertices:
+            for g in getattr(vertex, "groups", ()) or ():
+                slot = group_index_to_slot.get(int(g.group))
+                if slot is None:
+                    continue
+                weight = float(g.weight)
+                if weight <= 0.0:
+                    continue
+                vertex_indices.append(int(vertex.index))
+                bone_indices.append(slot)
+                weights.append(weight)
+
+    return SkinData(
+        bone_names=list(bone_names),
+        vertex_indices=np.array(vertex_indices, dtype=np.uint32),
+        bone_indices=np.array(bone_indices, dtype=np.uint32),
+        weights=np.array(weights, dtype=np.float32),
+    )
+
+
 # ---- private helpers ------------------------------------------------------
 
 
-def _resolve_block(
-    table: BlockTable, ref: int, expected: type[Any]
-) -> Any | None:
+def _resolve_block(table: BlockTable, ref: int, expected: type[Any]) -> Any | None:
     block = _resolve_optional(table, ref)
     if block is None or not isinstance(block, expected):
         return None

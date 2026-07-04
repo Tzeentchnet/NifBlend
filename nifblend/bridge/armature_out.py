@@ -23,14 +23,16 @@ groups via :mod:`nifblend.bridge.skin_in` / :mod:`mesh_out`.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import numpy.typing as npt
 
 from nifblend.format.generated.blocks import (
     BSDismemberSkinInstance,
+    NiNode,
     NiSkinData,
     NiSkinInstance,
     NiSkinPartition,
@@ -51,11 +53,14 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 __all__ = [
     "BoneLimits",
+    "BuiltBoneNode",
     "PartitionBuild",
     "bone_limits_for",
     "build_ni_skin_data",
     "build_ni_skin_instance",
+    "build_ninode_tree",
     "build_skin_partitions",
+    "matrix_to_translation_rotation_scale",
     "skin_partitions_to_block",
 ]
 
@@ -121,15 +126,11 @@ class PartitionBuild:
     ``bone_indices[v, k]`` is a position in this local palette.
     """
 
-    vertex_map: npt.NDArray[np.uint16] = field(
-        default_factory=lambda: np.empty(0, dtype=np.uint16)
-    )
+    vertex_map: npt.NDArray[np.uint16] = field(default_factory=lambda: np.empty(0, dtype=np.uint16))
     triangles: npt.NDArray[np.uint16] = field(
         default_factory=lambda: np.empty((0, 3), dtype=np.uint16)
     )
-    bones: npt.NDArray[np.uint16] = field(
-        default_factory=lambda: np.empty(0, dtype=np.uint16)
-    )
+    bones: npt.NDArray[np.uint16] = field(default_factory=lambda: np.empty(0, dtype=np.uint16))
     #: ``(num_vertices, num_weights_per_vertex)`` u8 -- index into ``bones``.
     bone_indices: npt.NDArray[np.uint8] = field(
         default_factory=lambda: np.empty((0, 0), dtype=np.uint8)
@@ -166,9 +167,7 @@ def build_skin_partitions(
     if limits.max_weights_per_vertex < 1:
         raise ValueError("max_weights_per_vertex must be >= 1")
 
-    per_vertex = _per_vertex_influences(
-        skin, num_vertices, limits.max_weights_per_vertex
-    )
+    per_vertex = _per_vertex_influences(skin, num_vertices, limits.max_weights_per_vertex)
     triangle_bones: list[frozenset[int]] = [
         frozenset(per_vertex[v1].keys() | per_vertex[v2].keys() | per_vertex[v3].keys())
         for v1, v2, v3 in tris.tolist()
@@ -180,8 +179,7 @@ def build_skin_partitions(
     for ti, bones in enumerate(triangle_bones):
         if len(bones) > cap:
             raise ValueError(
-                f"triangle {ti} touches {len(bones)} bones, exceeds "
-                f"per-partition cap of {cap}"
+                f"triangle {ti} touches {len(bones)} bones, exceeds per-partition cap of {cap}"
             )
 
     # Greedy first-fit. Open partitions are kept as (mutable bone-set,
@@ -260,9 +258,7 @@ def build_ni_skin_data(
     block.has_vertex_weights = True
     block.skin_partition = _NULL_REF
 
-    bone_lists: list[list[BoneVertData | None]] = [
-        [] for _ in skin.bone_names
-    ]
+    bone_lists: list[list[BoneVertData | None]] = [[] for _ in skin.bone_names]
     if skin.weights.size:
         # numpy.argsort is stable and runs in C; the per-bone slicing
         # below avoids any python-level "find indices for bone i" loop.
@@ -316,14 +312,11 @@ def build_ni_skin_instance(
     with an empty body-part partition list (step 17 fills that in).
     """
     refs = (
-        list(bone_block_refs)
-        if bone_block_refs is not None
-        else [_NULL_REF] * len(skin.bone_names)
+        list(bone_block_refs) if bone_block_refs is not None else [_NULL_REF] * len(skin.bone_names)
     )
     if len(refs) != len(skin.bone_names):
         raise ValueError(
-            f"bone_block_refs length {len(refs)} != bone palette size "
-            f"{len(skin.bone_names)}"
+            f"bone_block_refs length {len(refs)} != bone palette size {len(skin.bone_names)}"
         )
 
     block: NiSkinInstance
@@ -445,8 +438,7 @@ def _build_skin_partition_compound(
     sp.has_faces = True
     sp.strips = np.empty(0, dtype=np.uint16)
     sp.triangles = [
-        Triangle(v1=int(t[0]), v2=int(t[1]), v3=int(t[2]))
-        for t in p.triangles.tolist()
+        Triangle(v1=int(t[0]), v2=int(t[1]), v3=int(t[2])) for t in p.triangles.tolist()
     ]
     sp.has_bone_indices = True
     sp.bone_indices = p.bone_indices.reshape(-1).astype(np.uint8, copy=False).tolist()
@@ -478,3 +470,111 @@ def _empty_bone_data() -> object:
     bd.skin_transform = _identity_transform()
     bd.bounding_sphere = NiBound(center=Vector3(x=0.0, y=0.0, z=0.0), radius=0.0)
     return bd
+
+
+# ---- bone-hierarchy builder (Phase 5 step 15) -----------------------------
+
+
+def matrix_to_translation_rotation_scale(
+    matrix: npt.NDArray[np.float32],
+) -> tuple[Vector3, Matrix33, float]:
+    """Decompose a local 4x4 bind matrix into NIF's translation/rotation/scale triad.
+
+    Inverse of :func:`nifblend.bridge.armature_in.node_local_matrix`. Unlike
+    the Blender-object case
+    (:func:`nifblend.bridge.armature_in.world_matrix_to_trs`), NIF stores
+    rotation as a 3x3 matrix natively, so this skips the quaternion/Euler
+    detour entirely -- just extracts translation and normalises the
+    uniform scale factor out of the 3x3 block (NIF's translation/
+    rotation/scale triad only ever produces a *uniform* scale times a
+    pure rotation, so ``det(rotation_scale) == scale**3`` exactly).
+    """
+    rot_scale = np.asarray(matrix, dtype=np.float64)[:3, :3]
+    det = float(np.linalg.det(rot_scale))
+    scale = math.copysign(abs(det) ** (1.0 / 3.0), det) if det != 0.0 else 1.0
+    rot = rot_scale / scale if scale != 0.0 else np.eye(3)
+    translation = Vector3(x=float(matrix[0, 3]), y=float(matrix[1, 3]), z=float(matrix[2, 3]))
+    rotation = Matrix33(
+        m11=float(rot[0, 0]),
+        m12=float(rot[0, 1]),
+        m13=float(rot[0, 2]),
+        m21=float(rot[1, 0]),
+        m22=float(rot[1, 1]),
+        m23=float(rot[1, 2]),
+        m31=float(rot[2, 0]),
+        m32=float(rot[2, 1]),
+        m33=float(rot[2, 2]),
+    )
+    return translation, rotation, float(scale)
+
+
+@dataclass(slots=True)
+class BuiltBoneNode:
+    """One :class:`NiNode` bone block ready for a caller-owned string table.
+
+    ``block.children`` already holds *local* indices into the sibling
+    list returned alongside it (0-based, positional) -- the caller must
+    add its own block-table insertion offset before writing. ``name``
+    is the bone's resolved name, deliberately kept out of ``block.name``
+    (left at the schema default) so string-table allocation stays the
+    orchestrator's responsibility, mirroring
+    :mod:`nifblend.bridge.animation_out`'s ``_StringTable`` pattern.
+    """
+
+    block: NiNode
+    name: str
+    parent_index: int
+
+
+def build_ninode_tree(armature_obj: Any) -> list[BuiltBoneNode]:
+    """Build one :class:`NiNode` per bone in ``armature_obj``, parent-first.
+
+    Inverse of :func:`nifblend.bridge.armature_in.ninode_tree_to_armature_data`.
+    Reads each :class:`bpy.types.Bone`'s lossless local 4x4 bind matrix back
+    from its ``nifblend.bind_matrix`` PropertyGroup
+    (:func:`nifblend.bridge.armature_props.read_bind_matrix_from_props`);
+    bones that were never stamped (e.g. an armature authored from scratch
+    in Blender rather than round-tripped through NifBlend) fall back to an
+    identity local transform rather than erroring.
+
+    Returns a flat, parent-before-child ordered list so a single forward
+    pass materialises correctly (every bone's parent has already been
+    built when its turn comes) -- the same invariant
+    :class:`nifblend.bridge.armature_in.ArmatureData.bones` documents.
+    """
+    from nifblend.bridge.armature_props import read_bind_matrix_from_props
+
+    bones = list(getattr(armature_obj.data, "bones", ()) or ())
+    roots = [b for b in bones if getattr(b, "parent", None) is None]
+
+    out: list[BuiltBoneNode] = []
+    index_by_bone_name: dict[str, int] = {}
+
+    def _visit(bone: Any, parent_index: int) -> None:
+        matrix = read_bind_matrix_from_props(bone)
+        if matrix is None:
+            matrix = np.eye(4, dtype=np.float32)
+        translation, rotation, scale = matrix_to_translation_rotation_scale(matrix)
+
+        node = NiNode()
+        node.translation = translation
+        node.rotation = rotation
+        node.scale = scale
+        node.children = []
+        node.num_children = 0
+
+        this_index = len(out)
+        out.append(BuiltBoneNode(block=node, name=bone.name, parent_index=parent_index))
+        index_by_bone_name[bone.name] = this_index
+        if parent_index >= 0:
+            parent_node = out[parent_index].block
+            parent_node.children.append(this_index)
+            parent_node.num_children = len(parent_node.children)
+
+        for child in getattr(bone, "children", ()) or ():
+            _visit(child, this_index)
+
+    for root in roots:
+        _visit(root, -1)
+
+    return out

@@ -32,6 +32,7 @@ re-derive head/tail/roll from the PropertyGroup matrix.
 from __future__ import annotations
 
 import contextlib
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -50,8 +51,11 @@ __all__ = [
     "ArmatureData",
     "BoneData",
     "armature_data_to_blender",
+    "compute_world_transforms",
     "import_armature",
     "ninode_tree_to_armature_data",
+    "node_local_matrix",
+    "world_matrix_to_trs",
 ]
 
 
@@ -125,18 +129,22 @@ def ninode_tree_to_armature_data(
     """
     root_block = table.blocks[root_index]
     if not isinstance(root_block, NiNode):
-        raise TypeError(
-            f"block {root_index} is {type(root_block).__name__}, not NiNode"
-        )
+        raise TypeError(f"block {root_index} is {type(root_block).__name__}, not NiNode")
     armature_name = name if name is not None else _resolve_name(root_block, table)
     armature = ArmatureData(name=armature_name)
 
     if skip_root:
-        root_world = _node_local_matrix(root_block)
+        root_world = node_local_matrix(root_block)
         for child_idx in _ninode_children(root_block, table):
             _walk(table, child_idx, parent_bone=-1, parent_world=root_world, armature=armature)
     else:
-        _walk(table, root_index, parent_bone=-1, parent_world=np.eye(4, dtype=np.float32), armature=armature)
+        _walk(
+            table,
+            root_index,
+            parent_bone=-1,
+            parent_world=np.eye(4, dtype=np.float32),
+            armature=armature,
+        )
 
     return armature
 
@@ -150,7 +158,7 @@ def _walk(
     armature: ArmatureData,
 ) -> None:
     block = table.blocks[block_index]
-    local = _node_local_matrix(block)
+    local = node_local_matrix(block)
     world = parent_world @ local
     bone_index = len(armature.bones)
     armature.bones.append(
@@ -223,11 +231,7 @@ def armature_data_to_blender(
         # to +Z if the basis is degenerate (zero scale).
         y_axis = bone.world_matrix[:3, 1]
         norm = float(np.linalg.norm(y_axis))
-        direction = (
-            np.array([0.0, 0.0, 1.0], dtype=np.float32)
-            if norm < 1e-8
-            else y_axis / norm
-        )
+        direction = np.array([0.0, 0.0, 1.0], dtype=np.float32) if norm < 1e-8 else y_axis / norm
         length = bone_lengths[i]
         tail = head + direction * length
         eb.head = (float(head[0]), float(head[1]), float(head[2]))
@@ -239,7 +243,11 @@ def armature_data_to_blender(
 
     # Stamp the lossless local 4x4 onto each data-bone's PropertyGroup.
     for bone in data.bones:
-        data_bone = armature_data.bones.get(bone.name) if hasattr(armature_data.bones, "get") else armature_data.bones[bone.name]
+        data_bone = (
+            armature_data.bones.get(bone.name)
+            if hasattr(armature_data.bones, "get")
+            else armature_data.bones[bone.name]
+        )
         if data_bone is not None:
             apply_bind_matrix_to_props(data_bone, bone.local_matrix)
 
@@ -259,17 +267,22 @@ def import_armature(
     context: Any = None,
 ) -> Any:
     """Convert a NiNode tree into a Blender Armature in one call."""
-    data = ninode_tree_to_armature_data(
-        table, root_index, name=name, skip_root=skip_root
-    )
+    data = ninode_tree_to_armature_data(table, root_index, name=name, skip_root=skip_root)
     return armature_data_to_blender(data, bpy=bpy, context=context)
 
 
 # ---- private helpers ------------------------------------------------------
 
 
-def _node_local_matrix(block: NiNode) -> npt.NDArray[np.float32]:
-    """Compose ``block``'s translation + Matrix33 + scale into a 4x4."""
+def node_local_matrix(block: Any) -> npt.NDArray[np.float32]:
+    """Compose a NiAVObject-family block's translation + Matrix33 + scale into a 4x4.
+
+    Generic over any block exposing the schema's ``translation`` /
+    ``rotation`` / ``scale`` substrate -- ``NiNode`` (bones) as well as
+    geometry shapes (``BSTriShape``, ``NiTriShape``, ``NiTriStrips``),
+    since :func:`compute_world_transforms` walks the whole scene graph,
+    not just the bone subtree.
+    """
     out = np.eye(4, dtype=np.float32)
     rot = block.rotation
     if rot is not None:
@@ -291,6 +304,113 @@ def _node_local_matrix(block: NiNode) -> npt.NDArray[np.float32]:
         out[1, 3] = tr.y
         out[2, 3] = tr.z
     return out
+
+
+def compute_world_transforms(
+    table: BlockTable,
+) -> dict[int, npt.NDArray[np.float32]]:
+    """Compose the world-space transform of every reachable scene-graph block.
+
+    Walks from each :attr:`BlockTable.footer` root, recursing through
+    every ``NiNode.children`` ref -- both further ``NiNode``s and leaf
+    geometry shapes, since only ``NiNode`` carries a ``children`` list.
+    Returns a ``{block_index: world_matrix}`` map covering every block
+    reached this way (a shape parented several levels deep under
+    offset/rotated organisational nodes gets its fully-composed world
+    matrix here, not just its own local one). Cyclic references
+    (pathological controller-chain graphs -- see
+    :mod:`nifblend.io.block_table`) are guarded against with a visited
+    set. Blocks unreachable from any footer root, or lacking the
+    ``translation``/``rotation``/``scale`` substrate entirely, are
+    absent from the map; callers should fall back to identity.
+    """
+    transforms: dict[int, npt.NDArray[np.float32]] = {}
+    visited: set[int] = set()
+
+    def _visit(index: int, parent_world: npt.NDArray[np.float32]) -> None:
+        if index < 0 or index == 0xFFFFFFFF or index >= len(table.blocks):
+            return
+        if index in visited:
+            return
+        visited.add(index)
+        block = table.blocks[index]
+        if not hasattr(block, "translation"):
+            return
+        world = parent_world @ node_local_matrix(block)
+        transforms[index] = world
+        for ref in getattr(block, "children", None) or []:
+            _visit(int(ref), world)
+
+    roots = list(getattr(table.footer, "roots", None) or [])
+    for root in roots:
+        _visit(int(root), np.eye(4, dtype=np.float32))
+    return transforms
+
+
+def _rotation_matrix_to_quaternion(m: npt.NDArray[np.float64]) -> tuple[float, float, float, float]:
+    """Robust 3x3 rotation matrix -> ``(w, x, y, z)`` quaternion (Shepperd's method)."""
+    m00, m01, m02 = float(m[0, 0]), float(m[0, 1]), float(m[0, 2])
+    m10, m11, m12 = float(m[1, 0]), float(m[1, 1]), float(m[1, 2])
+    m20, m21, m22 = float(m[2, 0]), float(m[2, 1]), float(m[2, 2])
+    trace = m00 + m11 + m22
+    if trace > 0.0:
+        s = 0.5 / math.sqrt(trace + 1.0)
+        w = 0.25 / s
+        x = (m21 - m12) * s
+        y = (m02 - m20) * s
+        z = (m10 - m01) * s
+    elif m00 > m11 and m00 > m22:
+        s = 2.0 * math.sqrt(max(1.0 + m00 - m11 - m22, 0.0))
+        w = (m21 - m12) / s if s else 0.0
+        x = 0.25 * s
+        y = (m01 + m10) / s if s else 0.0
+        z = (m02 + m20) / s if s else 0.0
+    elif m11 > m22:
+        s = 2.0 * math.sqrt(max(1.0 + m11 - m00 - m22, 0.0))
+        w = (m02 - m20) / s if s else 0.0
+        x = (m01 + m10) / s if s else 0.0
+        y = 0.25 * s
+        z = (m12 + m21) / s if s else 0.0
+    else:
+        s = 2.0 * math.sqrt(max(1.0 + m22 - m00 - m11, 0.0))
+        w = (m10 - m01) / s if s else 0.0
+        x = (m02 + m20) / s if s else 0.0
+        y = (m12 + m21) / s if s else 0.0
+        z = 0.25 * s
+    return w, x, y, z
+
+
+def world_matrix_to_trs(
+    matrix: npt.NDArray[np.float32],
+) -> tuple[tuple[float, float, float], tuple[float, float, float], float]:
+    """Decompose a composed NiAVObject world matrix into Blender TRS.
+
+    NIF's translation/rotation/scale triad only ever produces a *uniform*
+    scale times a pure rotation in the 3x3 block -- chained uniform
+    scalars commute out of a matrix product (``(R1*s1) @ (R2*s2) ==
+    (R1@R2) * (s1*s2)``), so this never needs a general affine
+    decomposition (no shear, no non-uniform scale possible from this
+    data model). Rotation is converted matrix -> quaternion (Shepperd's
+    method) then quaternion -> Blender's intrinsic XYZ Euler via the
+    same closed-form formula
+    :func:`nifblend.bridge.animation_in.quaternion_stream_to_euler_streams`
+    already uses for keyframe streams, wrapped as a length-1 stream so
+    the two conversions never drift apart.
+
+    Returns ``(location_xyz, euler_xyz_radians, uniform_scale)``.
+    """
+    from nifblend.bridge.animation_in import quaternion_stream_to_euler_streams
+
+    rot_scale = matrix[:3, :3].astype(np.float64, copy=False)
+    det = float(np.linalg.det(rot_scale))
+    scale = math.copysign(abs(det) ** (1.0 / 3.0), det) if det != 0.0 else 1.0
+    rotation = rot_scale / scale if scale != 0.0 else np.eye(3)
+    w, x, y, z = _rotation_matrix_to_quaternion(rotation)
+    stream = np.array([[0.0, w, x, y, z]], dtype=np.float32)
+    ex, ey, ez = quaternion_stream_to_euler_streams(stream)
+    location = (float(matrix[0, 3]), float(matrix[1, 3]), float(matrix[2, 3]))
+    euler = (float(ex[0, 1]), float(ey[0, 1]), float(ez[0, 1]))
+    return location, euler, float(scale)
 
 
 def _ninode_children(block: NiNode, table: BlockTable) -> list[int]:

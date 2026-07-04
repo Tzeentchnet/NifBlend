@@ -78,7 +78,9 @@ class NIFBLEND_PT_main(_SidebarPanel, Panel):
         row = layout.row(align=True)
         row.operator("nifblend.import_batch", icon="IMPORT", text="Folder")
         row.operator("nifblend.import_cell", icon="WORLD_DATA", text="Cell")
-        layout.operator("nifblend.export_nif", icon="EXPORT", text="Export NIF")
+        row = layout.row(align=True)
+        row.operator("nifblend.export_nif", icon="EXPORT", text="Export NIF")
+        row.operator("nifblend.export_kf", icon="EXPORT", text="KF")
 
 
 class NIFBLEND_PT_utilities(_SidebarPanel, Panel):
